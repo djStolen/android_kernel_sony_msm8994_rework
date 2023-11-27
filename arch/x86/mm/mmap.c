@@ -90,7 +90,19 @@ static unsigned long mmap_base(unsigned long rnd)
 	else if (gap > MAX_GAP)
 		gap = MAX_GAP;
 
-	return PAGE_ALIGN(TASK_SIZE - gap - rnd);
+	return PAGE_ALIGN(TASK_SIZE - gap - mmap_rnd());
+}
+
+/*
+ * Bottom-up (legacy) layout on X86_32 did not support randomization, X86_64
+ * does, but not when emulating X86_32
+ */
+static unsigned long mmap_legacy_base(void)
+{
+	if (mmap_is_ia32())
+		return TASK_UNMAPPED_BASE;
+	else
+		return TASK_UNMAPPED_BASE + mmap_rnd();
 }
 
 /*

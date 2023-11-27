@@ -1087,11 +1087,9 @@ static ssize_t tun_get_user(struct tun_struct *tun, struct tun_file *tfile,
 	}
 
 	if (tun->flags & TUN_VNET_HDR) {
-		int vnet_hdr_sz = ACCESS_ONCE(tun->vnet_hdr_sz);
-
-		if (len < vnet_hdr_sz)
+		if (len < tun->vnet_hdr_sz)
 			return -EINVAL;
-		len -= vnet_hdr_sz;
+		len -= tun->vnet_hdr_sz;
 
 		if (memcpy_fromiovecend((void *)&gso, iv, offset, sizeof(gso)))
 			return -EFAULT;
@@ -1102,7 +1100,7 @@ static ssize_t tun_get_user(struct tun_struct *tun, struct tun_file *tfile,
 
 		if (gso.hdr_len > len)
 			return -EINVAL;
-		offset += vnet_hdr_sz;
+		offset += tun->vnet_hdr_sz;
 	}
 
 	if ((tun->flags & TUN_TYPE_MASK) == TUN_TAP_DEV) {
@@ -1277,7 +1275,7 @@ static ssize_t tun_put_user(struct tun_struct *tun,
 	int vnet_hdr_sz = 0;
 
 	if (tun->flags & TUN_VNET_HDR)
-		vnet_hdr_sz = ACCESS_ONCE(tun->vnet_hdr_sz);
+		vnet_hdr_sz = tun->vnet_hdr_sz;
 
 	if (!(tun->flags & TUN_NO_PI)) {
 		if ((len -= sizeof(pi)) < 0)
