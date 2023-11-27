@@ -1,11 +1,62 @@
 --- net/packet/af_packet.c
 +++ net/packet/af_packet.c
-@@ -3678,8 +3670,6 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
- 		rb->frames_per_block = req->tp_block_size/req->tp_frame_size;
- 		if (unlikely(rb->frames_per_block <= 0))
- 			goto out;
--		if (unlikely(req->tp_block_size > UINT_MAX / req->tp_block_nr))
--			goto out;
- 		if (unlikely((rb->frames_per_block * req->tp_block_nr) !=
- 					req->tp_frame_nr))
- 			goto out;
+@@ -1304,16 +1300,13 @@ static int fanout_add(struct sock *sk, u16 id, u16 type_flags)
+ 		return -EINVAL;
+ 	}
+ 
+-	mutex_lock(&fanout_mutex);
+-
+-	err = -EINVAL;
+ 	if (!po->running)
+-		goto out;
++		return -EINVAL;
+ 
+-	err = -EALREADY;
+ 	if (po->fanout)
+-		goto out;
++		return -EALREADY;
+ 
++	mutex_lock(&fanout_mutex);
+ 	match = NULL;
+ 	list_for_each_entry(f, &fanout_list, list) {
+ 		if (f->id == id &&
+@@ -1364,29 +1358,24 @@ out:
+ 	return err;
+ }
+ 
+-/* If pkt_sk(sk)->fanout->sk_ref is zero, this function removes
+- * pkt_sk(sk)->fanout from fanout_list and returns pkt_sk(sk)->fanout.
+- * It is the responsibility of the caller to call fanout_release_data() and
+- * free the returned packet_fanout (after synchronize_net())
+- */
+-static struct packet_fanout *fanout_release(struct sock *sk)
++static void fanout_release(struct sock *sk)
+ {
+ 	struct packet_sock *po = pkt_sk(sk);
+ 	struct packet_fanout *f;
+ 
++	f = po->fanout;
++	if (!f)
++		return;
++
+ 	mutex_lock(&fanout_mutex);
+-	f = po->fanout;
+-	if (f) {
+-		po->fanout = NULL;
++	po->fanout = NULL;
+ 
+-		if (atomic_dec_and_test(&f->sk_ref))
+-			list_del(&f->list);
+-		else
+-			f = NULL;
++	if (atomic_dec_and_test(&f->sk_ref)) {
++		list_del(&f->list);
++		dev_remove_pack(&f->prot_hook);
++		kfree(f);
+ 	}
+ 	mutex_unlock(&fanout_mutex);
+-
+-	return f;
+ }
+ 
+ static const struct proto_ops packet_ops;
