@@ -67,7 +67,7 @@ static int mmap_is_legacy(void)
 
 static unsigned long mmap_rnd(void)
 {
-	unsigned long rnd;
+	unsigned long rnd= 0;
 
 	if (mmap_is_ia32())
 #ifdef CONFIG_COMPAT

@@ -1381,6 +1381,8 @@ static int xc2028_set_config(struct dvb_frontend *fe, void *priv_cfg)
 
 	/*
 	 * Copy the config data.
+	 * For the firmware name, keep a local copy of the string,
+	 * in order to avoid troubles during device release.
 	 */
 	kfree(priv->ctrl.fname);
 	priv->ctrl.fname = NULL;
