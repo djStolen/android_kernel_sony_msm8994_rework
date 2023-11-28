@@ -273,8 +273,6 @@ static int t_show(struct seq_file *m, void *v)
 	int i;
 
 	seq_printf(m, "0x%lx : \"", 0L);
-	if (!*fmt)
-		return 0;
 
 	seq_printf(m, "0x%lx : \"", *(unsigned long *)fmt);
 
