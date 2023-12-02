@@ -60,9 +60,9 @@ static unsigned long mmap_rnd(void)
 			rnd = get_random_long() & ((1UL << mmap_rnd_bits) - 1);
 	}
 	if (current->flags & PF_RANDOMIZE)
-		rnd = (long)get_random_int() & STACK_RND_MASK;
+		rnd = (long)get_random_int() & (STACK_RND_MASK >> 1);
 
-	return rnd << PAGE_SHIFT;
+	return rnd << (PAGE_SHIFT + 1);
 }
 
 static unsigned long mmap_base(void)
