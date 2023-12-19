@@ -108,6 +108,3 @@ source "security/Kconfig"
 source "crypto/Kconfig"
 
 source "lib/Kconfig"
-
-config NO_IOMEM
-       def_bool y
