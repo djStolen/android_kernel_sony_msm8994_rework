@@ -1405,12 +1405,12 @@ static void tracing_stop_tr(struct trace_array *tr)
 
 void trace_stop_cmdline_recording(void);
 
-static int trace_save_cmdline(struct task_struct *tsk)
+static void trace_save_cmdline(struct task_struct *tsk)
 {
 	unsigned pid, idx;
 
 	if (!tsk->pid || unlikely(tsk->pid > PID_MAX_DEFAULT))
-		return 0;
+		return;
 
 	/*
 	 * It's not the end of the world if we don't get
@@ -1419,7 +1419,7 @@ static int trace_save_cmdline(struct task_struct *tsk)
 	 * so if we miss here, then better luck next time.
 	 */
 	if (!arch_spin_trylock(&trace_cmdline_lock))
-		return 0;
+		return;
 
 	idx = map_pid_to_cmdline[tsk->pid];
 	if (idx == NO_CMDLINE_MAP) {
@@ -1444,8 +1444,6 @@ static int trace_save_cmdline(struct task_struct *tsk)
 	memcpy(&saved_cmdlines[idx], tsk->comm, TASK_COMM_LEN);
 
 	arch_spin_unlock(&trace_cmdline_lock);
-
-	return 1;
 }
 
 void trace_find_cmdline(int pid, char comm[])
@@ -1487,8 +1485,9 @@ void tracing_record_cmdline(struct task_struct *tsk)
 	if (!__this_cpu_read(trace_cmdline_save))
 		return;
 
-	if (trace_save_cmdline(tsk))
-		__this_cpu_write(trace_cmdline_save, false);
+	__this_cpu_write(trace_cmdline_save, false);
+
+	trace_save_cmdline(tsk);
 }
 
 void
