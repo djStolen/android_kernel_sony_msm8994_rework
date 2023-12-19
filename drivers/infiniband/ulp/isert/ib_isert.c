@@ -404,6 +404,7 @@ isert_connect_request(struct rdma_cm_id *cma_id, struct rdma_cm_event *event)
 	init_completion(&isert_conn->conn_wait);
 	init_completion(&isert_conn->conn_wait_comp_err);
 	kref_init(&isert_conn->conn_kref);
+	kref_get(&isert_conn->conn_kref);
 	mutex_init(&isert_conn->conn_mutex);
 
 	cma_id->context = isert_conn;
@@ -529,9 +530,7 @@ isert_connect_release(struct isert_conn *isert_conn)
 static void
 isert_connected_handler(struct rdma_cm_id *cma_id)
 {
-	struct isert_conn *isert_conn = cma_id->context;
-
-	kref_get(&isert_conn->conn_kref);
+	return;
 }
 
 static void
@@ -583,6 +582,7 @@ isert_disconnect_work(struct work_struct *work)
 
 wake_up:
 	complete(&isert_conn->conn_wait);
+	isert_put_conn(isert_conn);
 }
 
 static void
@@ -2265,7 +2265,6 @@ static void isert_wait_conn(struct iscsi_conn *conn)
 	wait_for_completion(&isert_conn->conn_wait_comp_err);
 
 	wait_for_completion(&isert_conn->conn_wait);
-	isert_put_conn(isert_conn);
 }
 
 static void isert_free_conn(struct iscsi_conn *conn)

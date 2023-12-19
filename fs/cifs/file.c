@@ -735,7 +735,7 @@ int cifs_closedir(struct inode *inode, struct file *file)
 
 	cifs_dbg(FYI, "Freeing private data in close dir\n");
 	spin_lock(&cifs_file_list_lock);
-	if (server->ops->dir_needs_close(cfile)) {
+	if (!cfile->srch_inf.endOfSearch && !cfile->invalidHandle) {
 		cfile->invalidHandle = true;
 		spin_unlock(&cifs_file_list_lock);
 		if (server->ops->close_dir)
