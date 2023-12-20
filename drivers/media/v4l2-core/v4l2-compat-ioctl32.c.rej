@@ -1,19 +1,34 @@
 --- drivers/media/v4l2-core/v4l2-compat-ioctl32.c
 +++ drivers/media/v4l2-core/v4l2-compat-ioctl32.c
-@@ -284,7 +284,7 @@ static int put_v4l2_standard32(struct v4l2_standard *kp, struct v4l2_standard32
+@@ -178,9 +178,6 @@ struct v4l2_create_buffers32 {
+ 
+ static int __get_v4l2_format32(struct v4l2_format *kp, struct v4l2_format32 __user *up)
  {
- 	if (!access_ok(VERIFY_WRITE, up, sizeof(struct v4l2_standard32)) ||
- 		put_user(kp->index, &up->index) ||
--		put_user(kp->id, &up->id) ||
-+		copy_to_user(up->id, &kp->id, sizeof(__u64)) ||
- 		copy_to_user(up->name, kp->name, 24) ||
- 		copy_to_user(&up->frameperiod, &kp->frameperiod, sizeof(kp->frameperiod)) ||
- 		put_user(kp->framelines, &up->framelines) ||
-@@ -719,7 +719,6 @@ static int put_v4l2_ext_controls32(struct v4l2_ext_controls *kp, struct v4l2_ext
- struct v4l2_event32 {
- 	__u32				type;
- 	union {
--		compat_s64		value64;
- 		__u8			data[64];
- 	} u;
- 	__u32				pending;
+-	if (get_user(kp->type, &up->type))
+-		return -EFAULT;
+-
+ 	switch (kp->type) {
+ 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+ 	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+@@ -207,16 +204,17 @@ static int __get_v4l2_format32(struct v4l2_format *kp, struct v4l2_format32 __us
+ 
+ static int get_v4l2_format32(struct v4l2_format *kp, struct v4l2_format32 __user *up)
+ {
+-	if (!access_ok(VERIFY_READ, up, sizeof(struct v4l2_format32)))
+-		return -EFAULT;
++	if (!access_ok(VERIFY_READ, up, sizeof(struct v4l2_format32)) ||
++			get_user(kp->type, &up->type))
++			return -EFAULT;
+ 	return __get_v4l2_format32(kp, up);
+ }
+ 
+ static int get_v4l2_create32(struct v4l2_create_buffers *kp, struct v4l2_create_buffers32 __user *up)
+ {
+ 	if (!access_ok(VERIFY_READ, up, sizeof(struct v4l2_create_buffers32)) ||
+-	    copy_from_user(kp, up, offsetof(struct v4l2_create_buffers32, format)))
+-		return -EFAULT;
++	    copy_from_user(kp, up, offsetof(struct v4l2_create_buffers32, format.fmt)))
++			return -EFAULT;
+ 	return __get_v4l2_format32(&kp->format, &up->format);
+ }
+ 
