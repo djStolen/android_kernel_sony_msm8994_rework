@@ -612,16 +612,10 @@ int __init arm_add_memory(phys_addr_t start, phys_addr_t size)
 	 * Size is appropriately rounded down, start is rounded up.
 	 */
 	size -= start & ~PAGE_MASK;
-	aligned_start = PAGE_ALIGN(start);
+	bank->start = PAGE_ALIGN(start);
 
-#ifndef CONFIG_ARCH_PHYS_ADDR_T_64BIT
-	if (aligned_start > ULONG_MAX) {
-		printk(KERN_CRIT "Ignoring memory at 0x%08llx outside "
-		       "32-bit physical address space\n", (long long)start);
-		return -EINVAL;
-	}
-
-	if (aligned_start + size > ULONG_MAX) {
+#ifndef CONFIG_ARM_LPAE
+	if (bank->start + size < bank->start) {
 		printk(KERN_CRIT "Truncating memory at 0x%08llx to fit in "
 			"32-bit physical address space\n", (long long)start);
 		/*
