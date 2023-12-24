@@ -7793,14 +7793,14 @@ static void perf_pmu_rotate_stop(struct pmu *pmu)
 static void __perf_event_exit_context(void *__info)
 {
 	struct perf_event_context *ctx = __info;
-	struct perf_event *event;
+	struct perf_event *event, *tmp;
 
 	perf_pmu_rotate_stop(ctx->pmu);
 
-	rcu_read_lock();
-	list_for_each_entry_rcu(event, &ctx->event_list, event_entry)
+	list_for_each_entry_safe(event, tmp, &ctx->pinned_groups, group_entry)
 		__perf_remove_from_context(event);
-	rcu_read_unlock();
+	list_for_each_entry_safe(event, tmp, &ctx->flexible_groups, group_entry)
+		__perf_remove_from_context(event);
 }
 
 static void __perf_event_stop_swclock(void *__info)
