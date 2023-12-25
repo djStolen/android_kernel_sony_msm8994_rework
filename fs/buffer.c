@@ -666,9 +666,7 @@ static inline void save_dirty_task(struct page *page)
 static void __set_page_dirty(struct page *page,
 		struct address_space *mapping, int warn)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&mapping->tree_lock, flags);
+	spin_lock_irq(&mapping->tree_lock);
 	if (page->mapping) {	/* Race with truncate? */
 		WARN_ON_ONCE(warn && !PageUptodate(page));
 		account_page_dirtied(page, mapping);
@@ -676,7 +674,7 @@ static void __set_page_dirty(struct page *page,
 				page_index(page), PAGECACHE_TAG_DIRTY);
 		save_dirty_task(page);
 	}
-	spin_unlock_irqrestore(&mapping->tree_lock, flags);
+	spin_unlock_irq(&mapping->tree_lock);
 	__mark_inode_dirty(mapping->host, I_DIRTY_PAGES);
 }
 

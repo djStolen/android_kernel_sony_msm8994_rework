@@ -340,20 +340,10 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 	do {
 		next = pmd_addr_end(addr, end);
 		/* try section mapping first */
-		if (!pages && ((addr | next | phys) & ~SECTION_MASK) == 0) {
-			pmd_t old_pmd =*pmd;
-			set_pmd(pmd,
-				__pmd(phys | get_pmd_prot_sect_kernel(addr)));
-			/*
-			 * Check for previous table entries created during
-			 * boot (__create_page_tables) and flush them.
-			 */
-			if (!pmd_none(old_pmd))
-				flush_tlb_all();
-		} else {
-			alloc_init_pte(pmd, addr, next, __phys_to_pfn(phys),
-				       prot_pte);
-		}
+		if (!pages && ((addr | next | phys) & ~SECTION_MASK) == 0) 
+			set_pmd(pmd, __pmd(phys | get_pmd_prot_sect_kernel(addr)));
+		else
+			alloc_init_pte(pmd, addr, next, __phys_to_pfn(phys), prot_pte);
 		phys += next - addr;
 	} while (pmd++, addr = next, addr != end);
 }
