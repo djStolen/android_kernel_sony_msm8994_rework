@@ -27,18 +27,15 @@ static char *tpm_device_name = "TPM";
 static acpi_status ppi_callback(acpi_handle handle, u32 level, void *context,
 				void **return_value)
 {
-	acpi_status status = AE_OK;
+	acpi_status status;
 	struct acpi_buffer buffer = { ACPI_ALLOCATE_BUFFER, NULL };
-
-	if (ACPI_SUCCESS(acpi_get_name(handle, ACPI_FULL_PATHNAME, &buffer))) {
-		if (strstr(buffer.pointer, context) != NULL) {
-			*return_value = handle;
-			status = AE_CTRL_TERMINATE;
-		}
+	status = acpi_get_name(handle, ACPI_FULL_PATHNAME, &buffer);
+	if (strstr(buffer.pointer, context) != NULL) {
+		*return_value = handle;
 		kfree(buffer.pointer);
+		return AE_CTRL_TERMINATE;
 	}
-
-	return status;
+	return AE_OK;
 }
 
 static inline void ppi_assign_params(union acpi_object params[4],

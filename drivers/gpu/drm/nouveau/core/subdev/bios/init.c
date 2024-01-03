@@ -1295,11 +1295,7 @@ init_jump(struct nvbios_init *init)
 	u16 offset = nv_ro16(bios, init->offset + 1);
 
 	trace("JUMP\t0x%04x\n", offset);
-
-	if (init_exec(init))
-		init->offset = offset;
-	else
-		init->offset += 3;
+	init->offset = offset;
 }
 
 /**

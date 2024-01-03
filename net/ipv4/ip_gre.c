@@ -335,7 +335,6 @@ static int ipgre_rcv(struct sk_buff *skb)
 				  iph->saddr, iph->daddr, tpi.key);
 
 	if (tunnel) {
-		skb_pop_mac_header(skb);
 		ip_tunnel_rcv(tunnel, skb, &tpi, hdr_len, log_ecn_error);
 		return 0;
 	}
