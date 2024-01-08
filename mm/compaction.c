@@ -139,10 +139,6 @@ static void update_pageblock_skip(struct compact_control *cc,
 			bool migrate_scanner)
 {
 	struct zone *zone = cc->zone;
-
-	if (cc->ignore_skip_hint)
-		return;
-
 	if (!page)
 		return;
 

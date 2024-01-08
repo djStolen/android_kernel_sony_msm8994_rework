@@ -109,6 +109,16 @@ static inline void arch_timer_set_cntkctl(u32 cntkctl)
 	asm volatile("msr	cntkctl_el1, %0" : : "r" (cntkctl));
 }
 
+//static inline u64 arch_counter_get_cntpct(void)
+//{
+	//u64 cval;
+
+	//isb();
+	//asm volatile("mrs %0, cntpct_el0" : "=r" (cval));
+
+	//return cval;
+//}
+
 static inline void arch_timer_evtstrm_enable(int divider)
 {
 	u32 cntkctl = arch_timer_get_cntkctl();

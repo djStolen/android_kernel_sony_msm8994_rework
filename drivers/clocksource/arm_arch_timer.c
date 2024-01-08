@@ -722,6 +722,11 @@ static void __init arch_timer_init(struct device_node *np)
 		}
 	}
 
+	if (arch_timer_use_virtual)
+		arch_timer_read_counter = arch_counter_get_cntvct;
+	else
+		arch_timer_read_counter = arch_counter_get_cntpct;
+
 	arch_timer_register();
 	arch_timer_common_init();
 }
