@@ -688,6 +688,13 @@ void __init efi_init(void)
 
 	set_bit(EFI_MEMMAP, &efi.flags);
 
+#ifdef CONFIG_X86_32
+	if (efi_is_native()) {
+		x86_platform.get_wallclock = efi_get_time;
+		x86_platform.set_wallclock = efi_set_rtc_mmss;
+	}
+#endif
+
 #if EFI_DEBUG
 	print_efi_memmap();
 #endif
