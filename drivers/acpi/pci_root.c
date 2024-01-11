@@ -63,9 +63,6 @@ static struct acpi_scan_handler pci_root_handler = {
 	.ids = root_device_ids,
 	.attach = acpi_pci_root_add,
 	.detach = acpi_pci_root_remove,
-	.hotplug = {
-		.ignore = true,
-	},
 };
 
 /* Lock to protect both acpi_pci_roots lists */

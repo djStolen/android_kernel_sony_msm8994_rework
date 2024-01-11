@@ -365,19 +365,17 @@ void xenvif_disconnect(struct xenvif *vif)
 	if (netif_carrier_ok(vif->dev))
 		xenvif_carrier_off(vif);
 
-	if (vif->irq) {
+	atomic_dec(&vif->refcnt);
+	wait_event(vif->waiting_to_free, atomic_read(&vif->refcnt) == 0);
+
+	if (vif->irq)
 		unbind_from_irqhandler(vif->irq, vif);
-		vif->irq = 0;
-	}
 
 	xen_netbk_unmap_frontend_rings(vif);
 }
 
 void xenvif_free(struct xenvif *vif)
 {
-	atomic_dec(&vif->refcnt);
-	wait_event(vif->waiting_to_free, atomic_read(&vif->refcnt) == 0);
-
 	unregister_netdev(vif->dev);
 
 	free_netdev(vif->dev);
