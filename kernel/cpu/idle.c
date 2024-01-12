@@ -66,7 +66,7 @@ static inline int cpu_idle_poll(void)
 	rcu_idle_enter();
 	trace_cpu_idle_rcuidle(0, smp_processor_id());
 	local_irq_enable();
-	while (!tif_need_resched() && (cpu_idle_force_poll ||
+	while (!need_resched() && (cpu_idle_force_poll ||
 		__get_cpu_var(idle_force_poll)))
 		cpu_relax();
 	trace_cpu_idle_rcuidle(PWR_EVENT_EXIT, smp_processor_id());
@@ -114,7 +114,8 @@ static void cpu_idle_loop(void)
 			    __get_cpu_var(idle_force_poll)) {
 				cpu_idle_poll();
 			} else {
-				if (!current_clr_polling_and_test()) {
+				current_clr_polling();
+				if (!need_resched()) {
 					stop_critical_timings();
 					rcu_idle_enter();
 					arch_cpu_idle();
@@ -124,7 +125,7 @@ static void cpu_idle_loop(void)
 				} else {
 					local_irq_enable();
 				}
-				__current_set_polling();
+				current_set_polling();
 			}
 			arch_cpu_idle_exit();
 		}
@@ -153,7 +154,7 @@ void cpu_startup_entry(enum cpuhp_state state)
 	 */
 	boot_init_stack_canary();
 #endif
-	__current_set_polling();
+	current_set_polling();
 	arch_cpu_idle_prepare();
 	per_cpu(idle_force_poll, smp_processor_id()) = 0;
 	cpu_idle_loop();
