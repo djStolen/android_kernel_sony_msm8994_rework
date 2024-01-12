@@ -517,13 +517,13 @@ static void sync_cmos_clock(struct work_struct *work)
 			   &sync_cmos_work, timespec_to_jiffies(&next));
 }
 
-void ntp_notify_cmos_timer(void)
+static void ntp_notify_cmos_timer(void)
 {
 	queue_delayed_work(system_power_efficient_wq, &sync_cmos_work, 0);
 }
 
 #else
-void ntp_notify_cmos_timer(void) { }
+static void ntp_notify_cmos_timer(void) { }
 #endif
 
 
@@ -687,6 +687,8 @@ int __do_adjtimex(struct timex *txc, struct timespec *ts, s32 *time_tai)
 	txc->time.tv_usec = ts->tv_nsec;
 	if (!(time_status & STA_NANO))
 		txc->time.tv_usec /= NSEC_PER_USEC;
+
+	ntp_notify_cmos_timer();
 
 	return result;
 }
