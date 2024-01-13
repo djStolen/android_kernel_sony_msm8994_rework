@@ -1447,7 +1447,7 @@ struct vfsmount *collect_mounts(struct path *path)
 			 CL_COPY_ALL | CL_PRIVATE);
 	namespace_unlock();
 	if (IS_ERR(tree))
-		return ERR_CAST(tree);
+		return NULL;
 	return &tree->mnt;
 }
 
