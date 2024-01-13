@@ -126,7 +126,7 @@ enum {
 	/** Advise readdirplus  */
 	FUSE_I_ADVISE_RDPLUS,
 	/** An operation changing file size is in progress  */
-	FUSE_I_SIZE_UNSTABLE,
+//	FUSE_I_SIZE_UNSTABLE,
 	/** i_mtime has been updated locally; a flush to userspace needed */
 	FUSE_I_MTIME_DIRTY,
 };
