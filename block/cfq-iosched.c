@@ -4352,28 +4352,18 @@ static void cfq_exit_queue(struct elevator_queue *e)
 	kfree(cfqd);
 }
 
-static int cfq_init_queue(struct request_queue *q, struct elevator_type *e)
+static int cfq_init_queue(struct request_queue *q)
 {
 	struct cfq_data *cfqd;
 	struct blkcg_gq *blkg __maybe_unused;
 	int i, ret;
-	struct elevator_queue *eq;
-
-	eq = elevator_alloc(q, e);
-	if (!eq)
-		return -ENOMEM;
 
 	cfqd = kmalloc_node(sizeof(*cfqd), GFP_KERNEL | __GFP_ZERO, q->node);
-	if (!cfqd) {
-		kobject_put(&eq->kobj);
+	if (!cfqd)
 		return -ENOMEM;
-	}
-	eq->elevator_data = cfqd;
 
 	cfqd->queue = q;
-	spin_lock_irq(q->queue_lock);
-	q->elevator = eq;
-	spin_unlock_irq(q->queue_lock);
+	q->elevator->elevator_data = cfqd;
 
 	/* Init root service tree */
 	cfqd->grp_service_tree = CFQ_RB_ROOT;
@@ -4448,7 +4438,6 @@ static int cfq_init_queue(struct request_queue *q, struct elevator_type *e)
 
 out_free:
 	kfree(cfqd);
-	kobject_put(&eq->kobj);
 	return ret;
 }
 
