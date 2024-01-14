@@ -1106,7 +1106,6 @@ static unsigned long zap_pte_range(struct mmu_gather *tlb,
 	spinlock_t *ptl;
 	pte_t *start_pte;
 	pte_t *pte;
-	unsigned long range_start = addr;
 
 again:
 	init_rss_vec(rss);
@@ -1212,14 +1211,12 @@ again:
 		force_flush = 0;
 
 #ifdef HAVE_GENERIC_MMU_GATHER
-		tlb->start = range_start;
-		tlb->end = addr;
+		tlb->start = addr;
+		tlb->end = end;
 #endif
 		tlb_flush_mmu(tlb);
-		if (addr != end) {
-			range_start = addr;
+		if (addr != end)
 			goto again;
-		}
 	}
 
 	return addr;
