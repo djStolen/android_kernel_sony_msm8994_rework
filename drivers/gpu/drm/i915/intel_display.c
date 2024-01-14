@@ -4333,8 +4333,7 @@ static void vlv_update_pll(struct intel_crtc *crtc)
 
 static void i9xx_update_pll(struct intel_crtc *crtc,
 			    intel_clock_t *reduced_clock,
-			    int num_connectors,
-			    bool needs_tv_clock)
+			    int num_connectors)
 {
 	struct drm_device *dev = crtc->base.dev;
 	struct drm_i915_private *dev_priv = dev->dev_private;
@@ -4392,7 +4391,7 @@ static void i9xx_update_pll(struct intel_crtc *crtc,
 	if (INTEL_INFO(dev)->gen >= 4)
 		dpll |= (6 << PLL_LOAD_PULSE_PHASE_SHIFT);
 
-	if (is_sdvo && needs_tv_clock)
+	if (is_sdvo && intel_pipe_has_type(&crtc->base, INTEL_OUTPUT_TVOUT))
 		dpll |= PLL_REF_INPUT_TVCLKINBC;
 	else if (intel_pipe_has_type(&crtc->base, INTEL_OUTPUT_TVOUT))
 		/* XXX: just matching BIOS for now */
@@ -4717,8 +4716,7 @@ static int i9xx_crtc_mode_set(struct drm_crtc *crtc,
 	else
 		i9xx_update_pll(intel_crtc,
 				has_reduced_clock ? &reduced_clock : NULL,
-				num_connectors,
-				is_sdvo && is_tv);
+				num_connectors);
 
 	/* Set up the display plane register */
 	dspcntr = DISPPLANE_GAMMA_ENABLE;
