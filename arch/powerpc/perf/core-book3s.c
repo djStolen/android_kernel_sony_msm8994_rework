@@ -75,8 +75,6 @@ static unsigned int freeze_events_kernel = MMCR0_FCS;
 
 #define MMCR0_FCHV		0
 #define MMCR0_PMCjCE		MMCR0_PMCnCE
-#define MMCR0_FC56		0
-#define MMCR0_PMAO		0
 
 #define SPRN_MMCRA		SPRN_MMCR2
 #define MMCRA_SAMPLE_ENABLE	0
@@ -854,7 +852,7 @@ static void write_mmcr0(struct cpu_hw_events *cpuhw, unsigned long mmcr0)
 static void power_pmu_disable(struct pmu *pmu)
 {
 	struct cpu_hw_events *cpuhw;
-	unsigned long flags, val;
+	unsigned long flags;
 
 	if (!ppmu)
 		return;
@@ -862,6 +860,9 @@ static void power_pmu_disable(struct pmu *pmu)
 	cpuhw = &__get_cpu_var(cpu_hw_events);
 
 	if (!cpuhw->disabled) {
+		cpuhw->disabled = 1;
+		cpuhw->n_added = 0;
+
 		/*
 		 * Check if we ever enabled the PMU on this cpu.
 		 */
@@ -869,21 +870,6 @@ static void power_pmu_disable(struct pmu *pmu)
 			ppc_enable_pmcs();
 			cpuhw->pmcs_enabled = 1;
 		}
-
-		/*
-		 * Set the 'freeze counters' bit, clear PMAO/FC56.
-		 */
-		val  = mfspr(SPRN_MMCR0);
-		val |= MMCR0_FC;
-		val &= ~(MMCR0_PMAO | MMCR0_FC56);
-
-		/*
-		 * The barrier is to make sure the mtspr has been
-		 * executed and the PMU has frozen the events etc.
-		 * before we return.
-		 */
-		write_mmcr0(cpuhw, val);
-		mb();
 
 		/*
 		 * Disable instruction sampling if it was enabled
@@ -894,8 +880,14 @@ static void power_pmu_disable(struct pmu *pmu)
 			mb();
 		}
 
-		cpuhw->disabled = 1;
-		cpuhw->n_added = 0;
+		/*
+		 * Set the 'freeze counters' bit.
+		 * The barrier is to make sure the mtspr has been
+		 * executed and the PMU has frozen the events
+		 * before we return.
+		 */
+		write_mmcr0(cpuhw, mfspr(SPRN_MMCR0) | MMCR0_FC);
+		mb();
 	}
 	local_irq_restore(flags);
 }
@@ -919,18 +911,12 @@ static void power_pmu_enable(struct pmu *pmu)
 
 	if (!ppmu)
 		return;
-
 	local_irq_save(flags);
-
 	cpuhw = &__get_cpu_var(cpu_hw_events);
-	if (!cpuhw->disabled)
-		goto out;
-
-	if (cpuhw->n_events == 0) {
-		ppc_set_pmu_inuse(0);
-		goto out;
+	if (!cpuhw->disabled) {
+		local_irq_restore(flags);
+		return;
 	}
-
 	cpuhw->disabled = 0;
 
 	/*
@@ -942,6 +928,8 @@ static void power_pmu_enable(struct pmu *pmu)
 	if (!cpuhw->n_added) {
 		mtspr(SPRN_MMCRA, cpuhw->mmcr[2] & ~MMCRA_SAMPLE_ENABLE);
 		mtspr(SPRN_MMCR1, cpuhw->mmcr[1]);
+		if (cpuhw->n_events == 0)
+			ppc_set_pmu_inuse(0);
 		goto out_enable;
 	}
 

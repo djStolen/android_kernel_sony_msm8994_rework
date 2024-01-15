@@ -2075,17 +2075,11 @@ static void sync_request_write(struct mddev *mddev, struct r10bio *r10_bio)
 			 * both 'first' and 'i', so we just compare them.
 			 * All vec entries are PAGE_SIZE;
 			 */
-			int sectors = r10_bio->sectors;
-			for (j = 0; j < vcnt; j++) {
-				int len = PAGE_SIZE;
-				if (sectors < (len / 512))
-					len = sectors * 512;
+			for (j = 0; j < vcnt; j++)
 				if (memcmp(page_address(fbio->bi_io_vec[j].bv_page),
 					   page_address(tbio->bi_io_vec[j].bv_page),
-					   len))
+					   fbio->bi_io_vec[j].bv_len))
 					break;
-				sectors -= len/512;
-			}
 			if (j == vcnt)
 				continue;
 			atomic64_add(r10_bio->sectors, &mddev->resync_mismatches);
@@ -2915,13 +2909,14 @@ static sector_t sync_request(struct mddev *mddev, sector_t sector_nr,
 	 */
 	if (mddev->bitmap == NULL &&
 	    mddev->recovery_cp == MaxSector &&
-	    mddev->reshape_position == MaxSector &&
-	    !test_bit(MD_RECOVERY_SYNC, &mddev->recovery) &&
 	    !test_bit(MD_RECOVERY_REQUESTED, &mddev->recovery) &&
-	    !test_bit(MD_RECOVERY_RESHAPE, &mddev->recovery) &&
 	    conf->fullsync == 0) {
 		*skipped = 1;
-		return mddev->dev_sectors - sector_nr;
+		max_sector = mddev->dev_sectors;
+		if (test_bit(MD_RECOVERY_SYNC, &mddev->recovery) ||
+		    test_bit(MD_RECOVERY_RESHAPE, &mddev->recovery))
+			max_sector = mddev->resync_max_sectors;
+		return max_sector - sector_nr;
 	}
 
  skipped:
@@ -3391,7 +3386,6 @@ static sector_t sync_request(struct mddev *mddev, sector_t sector_nr,
 
 		if (bio->bi_end_io == end_sync_read) {
 			md_sync_acct(bio->bi_bdev, nr_sectors);
-			set_bit(BIO_UPTODATE, &bio->bi_flags);
 			generic_make_request(bio);
 		}
 	}
@@ -3538,7 +3532,7 @@ static struct r10conf *setup_conf(struct mddev *mddev)
 
 	/* FIXME calc properly */
 	conf->mirrors = kzalloc(sizeof(struct raid10_info)*(mddev->raid_disks +
-							    max(0,-mddev->delta_disks)),
+							    max(0,mddev->delta_disks)),
 				GFP_KERNEL);
 	if (!conf->mirrors)
 		goto out;
@@ -3697,7 +3691,7 @@ static int run(struct mddev *mddev)
 		    conf->geo.far_offset == 0)
 			goto out_free_conf;
 		if (conf->prev.far_copies != 1 &&
-		    conf->prev.far_offset == 0)
+		    conf->geo.far_offset == 0)
 			goto out_free_conf;
 	}
 
