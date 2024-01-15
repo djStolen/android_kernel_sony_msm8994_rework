@@ -1421,7 +1421,7 @@ static int mount_ubifs(struct ubifs_info *c)
 	c->mounting = 0;
 
 	ubifs_msg("mounted UBI, volume %d, name \"%s\"%s", c->vi.ubi_num,
-		  c->vi.vol_id, c->vi.name, c->ro_mount ? ", R/O mode" : "");
+		  c->vi.vol_id, c->vi.name, c->ro_mount ? ", R/O mode" : NULL);
 	x = (long long)c->main_lebs * c->leb_size;
 	y = (long long)c->log_lebs * c->leb_size + c->max_bud_bytes;
 	ubifs_msg("LEB size: %d bytes (%d KiB), min./max. I/O unit sizes: %d bytes/%d bytes",

@@ -6447,10 +6447,6 @@ __offline_isolated_pages(unsigned long start_pfn, unsigned long end_pfn)
 		list_del(&page->lru);
 		rmv_page_order(page);
 		zone->free_area[order].nr_free--;
-#ifdef CONFIG_HIGHMEM
-		if (PageHighMem(page))
-			totalhigh_pages -= 1 << order;
-#endif
 		if (is_migrate_cma(get_pageblock_migratetype(page)))
 			zone->free_area[order].nr_free_cma--;
 		for (i = 0; i < (1 << order); i++)
