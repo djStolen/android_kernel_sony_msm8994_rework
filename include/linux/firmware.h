@@ -60,8 +60,6 @@ int request_firmware_nowait_direct(
 	void * (*map_fw_mem)(phys_addr_t phys, size_t size, void *data),
 	void (*unmap_fw_mem)(void *virt, size_t size, void *data), void *data);
 void release_firmware(const struct firmware *fw);
-int cache_firmware(const char *name);
-int uncache_firmware(const char *name);
 #else
 static inline int request_firmware(const struct firmware **fw,
 				   const char *name,
@@ -101,15 +99,6 @@ static inline void release_firmware(const struct firmware *fw)
 {
 }
 
-static inline int cache_firmware(const char *name)
-{
-	return -ENOENT;
-}
-
-static inline int uncache_firmware(const char *name)
-{
-	return -EINVAL;
-}
 #endif
 
 #endif

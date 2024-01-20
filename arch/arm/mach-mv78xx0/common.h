@@ -13,6 +13,8 @@
 
 #include <linux/reboot.h>
 
+#include <linux/reboot.h>
+
 struct mv643xx_eth_platform_data;
 struct mv_sata_platform_data;
 

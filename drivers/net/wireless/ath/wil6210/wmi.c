@@ -261,6 +261,8 @@ static int __wmi_send(struct wil6210_priv *wil, u16 cmdid, void *buf, u16 len)
 
 	trace_wil6210_wmi_cmd(&cmd.wmi, buf, len);
 
+	trace_wil6210_wmi_cmd(cmdid, buf, len);
+
 	/* interrupt to FW */
 	iowrite32(SW_INT_MBOX, wil->csr + HOST_SW_INT);
 

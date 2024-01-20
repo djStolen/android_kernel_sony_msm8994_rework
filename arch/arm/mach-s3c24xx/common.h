@@ -14,6 +14,8 @@
 
 #include <linux/reboot.h>
 
+#include <linux/reboot.h>
+
 struct s3c2410_uartcfg;
 
 #ifdef CONFIG_CPU_S3C2410

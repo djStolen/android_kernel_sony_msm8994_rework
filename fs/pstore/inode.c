@@ -178,6 +178,8 @@ static int pstore_unlink(struct inode *dir, struct dentry *dentry)
 	if (p->psi->erase)
 		p->psi->erase(p->type, p->id, p->count,
 			      dentry->d_inode->i_ctime, p->psi);
+	else
+		return -EPERM;
 
 	return simple_unlink(dir, dentry);
 }
@@ -328,6 +330,15 @@ int pstore_mkfile(enum pstore_type_id type, char *psname, u64 id, int count,
 		break;
 	case PSTORE_TYPE_PMSG:
 		scnprintf(name, sizeof(name), "pmsg-%s-%lld", psname, id);
+		break;
+	case PSTORE_TYPE_PPC_RTAS:
+		sprintf(name, "rtas-%s-%lld", psname, id);
+		break;
+	case PSTORE_TYPE_PPC_OF:
+		sprintf(name, "powerpc-ofw-%s-%lld", psname, id);
+		break;
+	case PSTORE_TYPE_PPC_COMMON:
+		sprintf(name, "powerpc-common-%s-%lld", psname, id);
 		break;
 	case PSTORE_TYPE_UNKNOWN:
 		scnprintf(name, sizeof(name), "unknown-%s-%lld", psname, id);

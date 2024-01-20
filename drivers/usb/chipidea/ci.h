@@ -22,14 +22,14 @@
  * DEFINE
  *****************************************************************************/
 #define TD_PAGE_COUNT      5
-#define CI13XXX_PAGE_SIZE  4096ul /* page size for TD's */
+#define CI_HDRC_PAGE_SIZE  4096ul /* page size for TD's */
 #define ENDPT_MAX          32
 
 /******************************************************************************
  * STRUCTURES
  *****************************************************************************/
 /**
- * struct ci13xxx_ep - endpoint representation
+ * struct ci_hw_ep - endpoint representation
  * @ep: endpoint structure for gadget drivers
  * @dir: endpoint direction (TX/RX)
  * @num: endpoint number
@@ -41,7 +41,7 @@
  * @lock: pointer to controller's spinlock
  * @td_pool: pointer to controller's TD pool
  */
-struct ci13xxx_ep {
+struct ci_hw_ep {
 	struct usb_ep				ep;
 	u8					dir;
 	u8					num;
@@ -81,9 +81,9 @@ enum ci_role {
  * name: role name string (host/gadget)
  */
 struct ci_role_driver {
-	int		(*start)(struct ci13xxx *);
-	void		(*stop)(struct ci13xxx *);
-	irqreturn_t	(*irq)(struct ci13xxx *);
+	int		(*start)(struct ci_hdrc *);
+	void		(*stop)(struct ci_hdrc *);
+	irqreturn_t	(*irq)(struct ci_hdrc *);
 	const char	*name;
 };
 
@@ -122,7 +122,7 @@ struct hw_bank {
 };
 
 /**
- * struct ci13xxx - chipidea device representation
+ * struct ci_hdrc - chipidea device representation
  * @dev: pointer to parent device
  * @lock: access synchronization
  * @hw_bank: hardware register mapping
@@ -137,7 +137,7 @@ struct hw_bank {
  * @gadget: device side representation for peripheral controller
  * @driver: gadget driver
  * @hw_ep_max: total number of endpoints supported by hardware
- * @ci13xxx_ep: array of endpoints
+ * @ci_hw_ep: array of endpoints
  * @ep0_dir: ep0 direction
  * @ep0out: pointer to ep0 OUT endpoint
  * @ep0in: pointer to ep0 IN endpoint
@@ -153,7 +153,7 @@ struct hw_bank {
  * @hcd: pointer to usb_hcd for ehci host driver
  * @debugfs: root dentry for this controller in debugfs
  */
-struct ci13xxx {
+struct ci_hdrc {
 	struct device			*dev;
 	spinlock_t			lock;
 	struct hw_bank			hw_bank;
@@ -170,9 +170,9 @@ struct ci13xxx {
 	struct usb_gadget		gadget;
 	struct usb_gadget_driver	*driver;
 	unsigned			hw_ep_max;
-	struct ci13xxx_ep		ci13xxx_ep[ENDPT_MAX];
+	struct ci_hw_ep			ci_hw_ep[ENDPT_MAX];
 	u32				ep0_dir;
-	struct ci13xxx_ep		*ep0out, *ep0in;
+	struct ci_hw_ep			*ep0out, *ep0in;
 
 	struct usb_request		*status;
 	void				*status_buf;/* GET_STATUS buffer */
@@ -195,13 +195,13 @@ struct ci13xxx {
 	bool                      skip_flush; /* skip flushing remaining EP */
 };
 
-static inline struct ci_role_driver *ci_role(struct ci13xxx *ci)
+static inline struct ci_role_driver *ci_role(struct ci_hdrc *ci)
 {
 	BUG_ON(ci->role >= CI_ROLE_END || !ci->roles[ci->role]);
 	return ci->roles[ci->role];
 }
 
-static inline int ci_role_start(struct ci13xxx *ci, enum ci_role role)
+static inline int ci_role_start(struct ci_hdrc *ci, enum ci_role role)
 {
 	int ret;
 
@@ -217,7 +217,7 @@ static inline int ci_role_start(struct ci13xxx *ci, enum ci_role role)
 	return ret;
 }
 
-static inline void ci_role_stop(struct ci13xxx *ci)
+static inline void ci_role_stop(struct ci_hdrc *ci)
 {
 	enum ci_role role = ci->role;
 
@@ -236,7 +236,7 @@ static inline void ci_role_stop(struct ci13xxx *ci)
 #define REG_BITS   (32)
 
 /* register indices */
-enum ci13xxx_regs {
+enum ci_hw_regs {
 	CAP_CAPLENGTH,
 	CAP_HCCPARAMS,
 	CAP_DCCPARAMS,
@@ -269,7 +269,7 @@ enum ci13xxx_regs {
  *
  * This function returns register contents
  */
-static inline u32 hw_read(struct ci13xxx *ci, enum ci13xxx_regs reg, u32 mask)
+static inline u32 hw_read(struct ci_hdrc *ci, enum ci_hw_regs reg, u32 mask)
 {
 	return ioread32(ci->hw_bank.regmap[reg]) & mask;
 }
@@ -280,7 +280,7 @@ static inline u32 hw_read(struct ci13xxx *ci, enum ci13xxx_regs reg, u32 mask)
  * @mask: bitfield mask
  * @data: new value
  */
-static inline void hw_write(struct ci13xxx *ci, enum ci13xxx_regs reg,
+static inline void hw_write(struct ci_hdrc *ci, enum ci_hw_regs reg,
 			    u32 mask, u32 data)
 {
 	if (~mask)
@@ -297,7 +297,7 @@ static inline void hw_write(struct ci13xxx *ci, enum ci13xxx_regs reg,
  *
  * This function returns register contents
  */
-static inline u32 hw_test_and_clear(struct ci13xxx *ci, enum ci13xxx_regs reg,
+static inline u32 hw_test_and_clear(struct ci_hdrc *ci, enum ci_hw_regs reg,
 				    u32 mask)
 {
 	u32 val = ioread32(ci->hw_bank.regmap[reg]) & mask;
@@ -314,7 +314,7 @@ static inline u32 hw_test_and_clear(struct ci13xxx *ci, enum ci13xxx_regs reg,
  *
  * This function returns register contents
  */
-static inline u32 hw_test_and_write(struct ci13xxx *ci, enum ci13xxx_regs reg,
+static inline u32 hw_test_and_write(struct ci_hdrc *ci, enum ci_hw_regs reg,
 				    u32 mask, u32 data)
 {
 	u32 val = hw_read(ci, reg, ~0);
@@ -323,11 +323,11 @@ static inline u32 hw_test_and_write(struct ci13xxx *ci, enum ci13xxx_regs reg,
 	return (val & mask) >> __ffs(mask);
 }
 
-int hw_device_reset(struct ci13xxx *ci, u32 mode);
+int hw_device_reset(struct ci_hdrc *ci, u32 mode);
 
-int hw_port_test_set(struct ci13xxx *ci, u8 mode);
+int hw_port_test_set(struct ci_hdrc *ci, u8 mode);
 
-u8 hw_port_test_get(struct ci13xxx *ci);
+u8 hw_port_test_get(struct ci_hdrc *ci);
 
 int ci13xxx_wakeup(struct usb_gadget *_gadget);
 

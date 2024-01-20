@@ -3533,6 +3533,12 @@ static int sdhci_is_adma2_64bit(struct sdhci_host *host)
 {
 	return 0;
 }
+static void sdhci_runtime_pm_bus_on(struct sdhci_host *host)
+{
+}
+static void sdhci_runtime_pm_bus_off(struct sdhci_host *host)
+{
+}
 #endif
 
 int sdhci_add_host(struct sdhci_host *host)
@@ -4030,6 +4036,9 @@ int sdhci_add_host(struct sdhci_host *host)
 	 * Maximum block count.
 	 */
 	mmc->max_blk_count = (host->quirks & SDHCI_QUIRK_NO_MULTIBLOCK) ? 1 : 65535;
+
+	if (host->quirks2 & SDHCI_QUIRK2_CARD_ON_NEEDS_BUS_ON)
+		sdhci_runtime_pm_bus_on(host);
 
 	/*
 	 * Init tasklets.

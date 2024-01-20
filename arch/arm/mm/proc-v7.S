@@ -75,13 +75,14 @@ ENTRY(cpu_v7_do_idle)
 ENDPROC(cpu_v7_do_idle)
 
 ENTRY(cpu_v7_dcache_clean_area)
-	ALT_SMP(mov	pc, lr)			@ MP extensions imply L1 PTW
-	ALT_UP(W(nop))
-	dcache_line_size r2, r3
-1:	mcr	p15, 0, r0, c7, c10, 1		@ clean D entry
+	ALT_SMP(W(nop))			@ MP extensions imply L1 PTW
+	ALT_UP_B(1f)
+	mov	pc, lr
+1:	dcache_line_size r2, r3
+2:	mcr	p15, 0, r0, c7, c10, 1		@ clean D entry
 	add	r0, r0, r2
 	subs	r1, r1, r2
-	bhi	1b
+	bhi	2b
 	dsb
 	mov	pc, lr
 ENDPROC(cpu_v7_dcache_clean_area)
@@ -132,14 +133,15 @@ ENTRY(cpu_v7_do_resume)
 	ldmia	r0!, {r7 - r11}
 	mcr	p15, 0, r7, c3, c0, 0	@ Domain ID
 	mcr	p15, 0, r11, c2, c0, 2	@ TTB control register
-	mrc	p15, 0, r4, c1, c0, 1	@ Read Auxiliary control register
-	teq	r4, r9			@ Is it already set?
-	mcrne	p15, 0, r9, c1, c0, 1	@ No, so write it
-	mcr	p15, 0, r10, c1, c0, 2	@ Co-processor access control
 	ldr	r4, =PRRR		@ PRRR
 	ldr	r5, =NMRR		@ NMRR
 	mcr	p15, 0, r4, c10, c2, 0	@ write PRRR
 	mcr	p15, 0, r5, c10, c2, 1	@ write NMRR
+#endif	/* CONFIG_MMU */
+	mrc	p15, 0, r4, c1, c0, 1	@ Read Auxiliary control register
+	teq	r4, r9			@ Is it already set?
+	mcrne	p15, 0, r9, c1, c0, 1	@ No, so write it
+	mcr	p15, 0, r10, c1, c0, 2	@ Co-processor access control
 	isb
 	dsb
 	mov	r0, r8			@ control register
@@ -170,8 +172,6 @@ ENDPROC(cpu_pj4b_do_idle)
 
 #endif
 
-	__CPUINIT
-
 /*
  *	__v7_setup
  *
@@ -185,7 +185,8 @@ ENDPROC(cpu_pj4b_do_idle)
  */
 __v7_ca5mp_setup:
 __v7_ca9mp_setup:
-	mov	r10, #(1 << 0)			@ TLB ops broadcasting
+__v7_cr7mp_setup:
+	mov	r10, #(1 << 0)			@ Cache/TLB ops broadcasting
 	b	1f
 __v7_ca7mp_setup:
 __v7_ca15mp_setup:
@@ -474,6 +475,16 @@ __v7_pj4b_proc_info:
 	__v7_proc __v7_pj4b_setup, proc_fns = pj4b_processor_functions
 	.size	__v7_pj4b_proc_info, . - __v7_pj4b_proc_info
 #endif
+
+	/*
+	 * ARM Ltd. Cortex R7 processor.
+	 */
+	.type	__v7_cr7mp_proc_info, #object
+__v7_cr7mp_proc_info:
+	.long	0x410fc170
+	.long	0xff0ffff0
+	__v7_proc __v7_cr7mp_setup
+	.size	__v7_cr7mp_proc_info, . - __v7_cr7mp_proc_info
 
 	/*
 	 * ARM Ltd. Cortex A7 processor.

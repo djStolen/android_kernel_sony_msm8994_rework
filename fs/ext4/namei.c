@@ -922,11 +922,8 @@ static int htree_dirblock_to_tree(struct file *dir_file,
 				bh->b_data, bh->b_size,
 				(block<<EXT4_BLOCK_SIZE_BITS(dir->i_sb))
 					 + ((char *)de - bh->b_data))) {
-			/* On error, skip the f_pos to the next block. */
-			dir_file->f_pos = (dir_file->f_pos |
-					(dir->i_sb->s_blocksize - 1)) + 1;
-			brelse(bh);
-			return count;
+			/* silently ignore the rest of the block */
+			break;
 		}
 		ext4fs_dirhash(de->name, de->name_len, hinfo);
 		if ((hinfo->hash < start_hash) ||
@@ -2338,6 +2335,45 @@ retry:
 err_unlock_inode:
 	ext4_journal_stop(handle);
 	unlock_new_inode(inode);
+	return err;
+}
+
+static int ext4_tmpfile(struct inode *dir, struct dentry *dentry, umode_t mode)
+{
+	handle_t *handle;
+	struct inode *inode;
+	int err, retries = 0;
+
+	dquot_initialize(dir);
+
+retry:
+	inode = ext4_new_inode_start_handle(dir, mode,
+					    NULL, 0, NULL,
+					    EXT4_HT_DIR,
+			EXT4_MAXQUOTAS_INIT_BLOCKS(dir->i_sb) +
+			  4 + EXT4_XATTR_TRANS_BLOCKS);
+	handle = ext4_journal_current_handle();
+	err = PTR_ERR(inode);
+	if (!IS_ERR(inode)) {
+		inode->i_op = &ext4_file_inode_operations;
+		inode->i_fop = &ext4_file_operations;
+		ext4_set_aops(inode);
+		d_tmpfile(dentry, inode);
+		err = ext4_orphan_add(handle, inode);
+		if (err)
+			goto err_drop_inode;
+		mark_inode_dirty(inode);
+		unlock_new_inode(inode);
+	}
+	if (handle)
+		ext4_journal_stop(handle);
+	if (err == -ENOSPC && ext4_should_retry_alloc(dir->i_sb, &retries))
+		goto retry;
+	return err;
+err_drop_inode:
+	ext4_journal_stop(handle);
+	unlock_new_inode(inode);
+	iput(inode);
 	return err;
 }
 

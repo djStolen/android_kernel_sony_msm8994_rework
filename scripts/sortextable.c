@@ -35,6 +35,10 @@
 #define EM_AARCH64	183
 #endif
 
+#ifndef EM_AARCH64
+#define EM_AARCH64	183
+#endif
+
 static int fd_map;	/* File descriptor for file being modified. */
 static int mmap_failed; /* Boolean flag. */
 static void *ehdr_curr; /* current ElfXX_Ehdr *  for resource cleanup */

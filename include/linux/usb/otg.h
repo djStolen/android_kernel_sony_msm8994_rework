@@ -142,4 +142,11 @@ enum usb_dr_mode {
 	USB_DR_MODE_OTG,
 };
 
+enum usb_dr_mode {
+	USB_DR_MODE_UNKNOWN,
+	USB_DR_MODE_HOST,
+	USB_DR_MODE_PERIPHERAL,
+	USB_DR_MODE_OTG,
+};
+
 #endif /* __LINUX_USB_OTG_H */

@@ -28,7 +28,7 @@
 #define MSM_EP_PIPE_ID_RESET_VAL	0x1F001F
 
 /* DMA layout of transfer descriptors */
-struct ci13xxx_td {
+struct ci_hw_td {
 	/* 0 */
 	u32 next;
 #define TD_TERMINATE          BIT(0)

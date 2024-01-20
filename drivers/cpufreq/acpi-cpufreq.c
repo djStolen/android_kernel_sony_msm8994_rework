@@ -186,6 +186,15 @@ static ssize_t show_freqdomain_cpus(struct cpufreq_policy *policy, char *buf)
 
 cpufreq_freq_attr_ro(freqdomain_cpus);
 
+static ssize_t show_freqdomain_cpus(struct cpufreq_policy *policy, char *buf)
+{
+	struct acpi_cpufreq_data *data = per_cpu(acfreq_data, policy->cpu);
+
+	return cpufreq_show_cpus(data->freqdomain_cpus, buf);
+}
+
+cpufreq_freq_attr_ro(freqdomain_cpus);
+
 #ifdef CONFIG_X86_ACPI_CPUFREQ_CPB
 static ssize_t store_cpb(struct cpufreq_policy *policy, const char *buf,
 			 size_t count)
@@ -504,12 +513,14 @@ static int acpi_cpufreq_target(struct cpufreq_policy *policy,
 			pr_debug("acpi_cpufreq_target failed (%d)\n",
 				policy->cpu);
 			result = -EAGAIN;
-			goto out;
+			freqs.new = freqs.old;
 		}
 	}
 
 	cpufreq_notify_transition(policy, &freqs, CPUFREQ_POSTCHANGE);
-	perf->state = next_perf_state;
+
+	if (!result)
+		perf->state = next_perf_state;
 
 out:
 	return result;
@@ -717,6 +728,11 @@ static int acpi_cpufreq_cpu_init(struct cpufreq_policy *policy)
 		goto err_free;
 	}
 
+	if (!zalloc_cpumask_var(&data->freqdomain_cpus, GFP_KERNEL)) {
+		result = -ENOMEM;
+		goto err_free;
+	}
+
 	data->acpi_data = per_cpu_ptr(acpi_perf_data, cpu);
 	per_cpu(acfreq_data, cpu) = data;
 
@@ -746,6 +762,7 @@ static int acpi_cpufreq_cpu_init(struct cpufreq_policy *policy)
 		policy->shared_type = CPUFREQ_SHARED_TYPE_ALL;
 		cpumask_copy(policy->cpus, cpu_core_mask(cpu));
 	}
+	cpumask_copy(data->freqdomain_cpus, perf->shared_cpu_map);
 
 	if (check_amd_hwpstate_cpu(cpu) && !acpi_pstate_strict) {
 		cpumask_clear(policy->cpus);
@@ -1055,5 +1072,12 @@ static const struct x86_cpu_id acpi_cpufreq_ids[] = {
 	{}
 };
 MODULE_DEVICE_TABLE(x86cpu, acpi_cpufreq_ids);
+
+static const struct acpi_device_id processor_device_ids[] = {
+	{ACPI_PROCESSOR_OBJECT_HID, },
+	{ACPI_PROCESSOR_DEVICE_HID, },
+	{},
+};
+MODULE_DEVICE_TABLE(acpi, processor_device_ids);
 
 MODULE_ALIAS("acpi");

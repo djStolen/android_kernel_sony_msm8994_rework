@@ -81,7 +81,10 @@ void default_teardown_msi_irqs(struct pci_dev *dev)
 		int i, nvec;
 		if (entry->irq == 0)
 			continue;
-		nvec = 1 << entry->msi_attrib.multiple;
+		if (entry->nvec_used)
+			nvec = entry->nvec_used;
+		else
+			nvec = 1 << entry->msi_attrib.multiple;
 		for (i = 0; i < nvec; i++)
 			arch_teardown_msi_irq(entry->irq + i);
 	}

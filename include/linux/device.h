@@ -76,6 +76,10 @@ extern void bus_remove_file(struct bus_type *, struct bus_attribute *);
  *		the specific driver's probe to initial the matched device.
  * @remove:	Called when a device removed from this bus.
  * @shutdown:	Called at shut-down time to quiesce the device.
+ *
+ * @online:	Called to put the device back online (after offlining it).
+ * @offline:	Called to put the device offline for hot-removal. May fail.
+ *
  * @suspend:	Called when a device on this bus wants to go to sleep mode.
  * @resume:	Called to bring a device on this bus out of sleep mode.
  * @pm:		Power management operations of this bus, callback the specific
@@ -85,6 +89,7 @@ extern void bus_remove_file(struct bus_type *, struct bus_attribute *);
  *              bus-specific setup
  * @p:		The private data of the driver core, only the driver core can
  *		touch this.
+ * @lock_key:	Lock class key for use by the lock validator
  *
  * A bus is a channel between the processor and one or more devices. For the
  * purposes of the device model, all devices are connected via a bus, even if
@@ -108,6 +113,9 @@ struct bus_type {
 	int (*probe)(struct device *dev);
 	int (*remove)(struct device *dev);
 	void (*shutdown)(struct device *dev);
+
+	int (*online)(struct device *dev);
+	int (*offline)(struct device *dev);
 
 	int (*suspend)(struct device *dev, pm_message_t state);
 	int (*resume)(struct device *dev);
@@ -679,6 +687,7 @@ struct acpi_dev_node {
  * 		segment limitations.
  * @dma_pools:	Dma pools (if dma'ble device).
  * @dma_mem:	Internal for coherent mem override.
+ * @cma_area:	Contiguous memory area for dma allocations
  * @archdata:	For arch-specific additions.
  * @of_node:	Associated device tree node.
  * @acpi_node:	Associated ACPI device node.
@@ -692,6 +701,10 @@ struct acpi_dev_node {
  * @release:	Callback to free the device after all references have
  * 		gone away. This should be set by the allocator of the
  * 		device (i.e. the bus driver that discovered the device).
+ * @iommu_group: IOMMU group the device belongs to.
+ *
+ * @offline_disabled: If set, the device is permanently online.
+ * @offline:	Set after successful invocation of bus type's .offline().
  *
  * At the lowest level, every device in a Linux system is represented by an
  * instance of struct device. The device structure contains the information
@@ -764,6 +777,9 @@ struct device {
 
 	void	(*release)(struct device *dev);
 	struct iommu_group	*iommu_group;
+
+	bool			offline_disabled:1;
+	bool			offline:1;
 };
 
 static inline struct device *kobj_to_dev(struct kobject *kobj)
@@ -900,6 +916,15 @@ extern const char *device_get_devnode(struct device *dev,
 extern void *dev_get_drvdata(const struct device *dev);
 extern int dev_set_drvdata(struct device *dev, void *data);
 
+static inline bool device_supports_offline(struct device *dev)
+{
+	return dev->bus && dev->bus->offline && dev->bus->online;
+}
+
+extern void lock_device_hotplug(void);
+extern void unlock_device_hotplug(void);
+extern int device_offline(struct device *dev);
+extern int device_online(struct device *dev);
 /*
  * Root device objects for grouping under /sys/devices
  */
@@ -942,6 +967,11 @@ extern struct device *device_create_vargs(struct class *cls,
 extern __printf(5, 6)
 struct device *device_create(struct class *cls, struct device *parent,
 			     dev_t devt, void *drvdata,
+			     const char *fmt, ...);
+extern __printf(6, 7)
+struct device *device_create_with_groups(struct class *cls,
+			     struct device *parent, dev_t devt, void *drvdata,
+			     const struct attribute_group **groups,
 			     const char *fmt, ...);
 extern void device_destroy(struct class *cls, dev_t devt);
 

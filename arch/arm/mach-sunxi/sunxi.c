@@ -27,8 +27,6 @@
 #include <asm/mach/map.h>
 #include <asm/system_misc.h>
 
-#include "sunxi.h"
-
 #define SUN4I_WATCHDOG_CTRL_REG		0x00
 #define SUN4I_WATCHDOG_CTRL_RESTART		(1 << 0)
 #define SUN4I_WATCHDOG_MODE_REG		0x04
@@ -82,20 +80,6 @@ static void sunxi_setup_restart(void)
 	arm_pm_restart = of_id->data;
 }
 
-static struct map_desc sunxi_io_desc[] __initdata = {
-	{
-		.virtual	= (unsigned long) SUNXI_REGS_VIRT_BASE,
-		.pfn		= __phys_to_pfn(SUNXI_REGS_PHYS_BASE),
-		.length		= SUNXI_REGS_SIZE,
-		.type		= MT_DEVICE,
-	},
-};
-
-void __init sunxi_map_io(void)
-{
-	iotable_init(sunxi_io_desc, ARRAY_SIZE(sunxi_io_desc));
-}
-
 static void __init sunxi_timer_init(void)
 {
 	sunxi_init_clocks();
@@ -111,14 +95,13 @@ static void __init sunxi_dt_init(void)
 
 static const char * const sunxi_board_dt_compat[] = {
 	"allwinner,sun4i-a10",
+	"allwinner,sun5i-a10s",
 	"allwinner,sun5i-a13",
 	NULL,
 };
 
 DT_MACHINE_START(SUNXI_DT, "Allwinner A1X (Device Tree)")
 	.init_machine	= sunxi_dt_init,
-	.map_io		= sunxi_map_io,
-	.init_irq	= irqchip_init,
 	.init_time	= sunxi_timer_init,
 	.dt_compat	= sunxi_board_dt_compat,
 MACHINE_END

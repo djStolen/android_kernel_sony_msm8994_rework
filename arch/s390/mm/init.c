@@ -69,6 +69,7 @@ static void __init setup_zero_pages(void)
 		order = 2;
 		break;
 	case 0x2827:	/* zEC12 */
+	case 0x2828:	/* zEC12 */
 	default:
 		order = 5;
 		break;
@@ -166,13 +167,14 @@ void __init mem_init(void)
 
 void free_initmem(void)
 {
-	free_initmem_default(0);
+	free_initmem_default(POISON_FREE_INITMEM);
 }
 
 #ifdef CONFIG_BLK_DEV_INITRD
 void __init free_initrd_mem(unsigned long start, unsigned long end)
 {
-	free_reserved_area(start, end, POISON_FREE_INITMEM, "initrd");
+	free_reserved_area((void *)start, (void *)end, POISON_FREE_INITMEM,
+			   "initrd");
 }
 #endif
 

@@ -38,6 +38,19 @@ jiffies = jiffies_64;
 	*(.hyp.text)					\
 	VMLINUX_SYMBOL(__hyp_text_end) = .;
 
+#define HYPERVISOR_TEXT					\
+	/*						\
+	 * Force the alignment to be compatible with	\
+	 * the vectors requirements			\
+	 */						\
+	. = ALIGN(2048);				\
+	VMLINUX_SYMBOL(__hyp_idmap_text_start) = .;	\
+	*(.hyp.idmap.text)				\
+	VMLINUX_SYMBOL(__hyp_idmap_text_end) = .;	\
+	VMLINUX_SYMBOL(__hyp_text_start) = .;		\
+	*(.hyp.text)					\
+	VMLINUX_SYMBOL(__hyp_text_end) = .;
+
 SECTIONS
 {
 	/*

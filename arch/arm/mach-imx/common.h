@@ -13,6 +13,8 @@
 
 #include <linux/reboot.h>
 
+#include <linux/reboot.h>
+
 struct platform_device;
 struct pt_regs;
 struct clk;

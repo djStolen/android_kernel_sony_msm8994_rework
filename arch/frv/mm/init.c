@@ -78,7 +78,7 @@ void __init paging_init(void)
 	memset((void *) empty_zero_page, 0, PAGE_SIZE);
 
 #ifdef CONFIG_HIGHMEM
-	if (num_physpages - num_mappedpages) {
+	if (get_num_physpages() - num_mappedpages) {
 		pgd_t *pge;
 		pud_t *pue;
 		pmd_t *pme;
@@ -96,7 +96,7 @@ void __init paging_init(void)
 	 */
 	zones_size[ZONE_NORMAL]  = max_low_pfn - min_low_pfn;
 #ifdef CONFIG_HIGHMEM
-	zones_size[ZONE_HIGHMEM] = num_physpages - num_mappedpages;
+	zones_size[ZONE_HIGHMEM] = get_num_physpages() - num_mappedpages;
 #endif
 
 	free_area_init(zones_size);
@@ -162,7 +162,7 @@ void __init mem_init(void)
 void free_initmem(void)
 {
 #if defined(CONFIG_RAMKERNEL) && !defined(CONFIG_PROTECT_KERNEL)
-	free_initmem_default(0);
+	free_initmem_default(-1);
 #endif
 } /* end free_initmem() */
 
@@ -173,6 +173,6 @@ void free_initmem(void)
 #ifdef CONFIG_BLK_DEV_INITRD
 void __init free_initrd_mem(unsigned long start, unsigned long end)
 {
-	free_reserved_area(start, end, 0, "initrd");
+	free_reserved_area((void *)start, (void *)end, -1, "initrd");
 } /* end free_initrd_mem() */
 #endif

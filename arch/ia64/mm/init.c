@@ -154,9 +154,8 @@ ia64_init_addr_space (void)
 void
 free_initmem (void)
 {
-	free_reserved_area((unsigned long)ia64_imva(__init_begin),
-			   (unsigned long)ia64_imva(__init_end),
-			   0, "unused kernel");
+	free_reserved_area(ia64_imva(__init_begin), ia64_imva(__init_end),
+			   -1, "unused kernel");
 }
 
 void __init
@@ -546,19 +545,6 @@ int __init register_active_ranges(u64 start, u64 len, int nid)
 	return 0;
 }
 
-static int __init
-count_reserved_pages(u64 start, u64 end, void *arg)
-{
-	unsigned long num_reserved = 0;
-	unsigned long *count = arg;
-
-	for (; start < end; start += PAGE_SIZE)
-		if (PageReserved(virt_to_page(start)))
-			++num_reserved;
-	*count += num_reserved;
-	return 0;
-}
-
 int
 find_max_min_low_pfn (u64 start, u64 end, void *arg)
 {
@@ -597,8 +583,6 @@ __setup("nolwsys", nolwsys_setup);
 void __init
 mem_init (void)
 {
-	long reserved_pages, codesize, datasize, initsize;
-	pg_data_t *pgdat;
 	int i;
 
 	BUG_ON(PTRS_PER_PGD * sizeof(pgd_t) != PAGE_SIZE);

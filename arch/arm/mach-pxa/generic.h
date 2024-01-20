@@ -11,6 +11,8 @@
 
 #include <linux/reboot.h>
 
+#include <linux/reboot.h>
+
 struct irq_data;
 
 extern void pxa_timer_init(void);

@@ -86,4 +86,6 @@
  * into mainline but it will take a while. */
 #define SO_SIZEHINT		100
 
+#define SO_BUSY_POLL		46
+
 #endif /* __ASM_GENERIC_SOCKET_H */

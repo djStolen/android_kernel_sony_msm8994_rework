@@ -130,6 +130,10 @@ struct fat_boot_sector {
 			__u8	drive_number;	/* Physical drive number */
 			__u8	state;		/* undocumented, but used
 						   for mount state. */
+			__u8	signature;  /* extended boot signature */
+			__u8	vol_id[4];	/* volume ID */
+			__u8	vol_label[11];	/* volume label */
+			__u8	fs_type[8];		/* file system type */
 			/* other fiealds are not added here */
 		} fat16;
 
@@ -149,6 +153,10 @@ struct fat_boot_sector {
 			__u8	drive_number;   /* Physical drive number */
 			__u8    state;       	/* undocumented, but used
 						   for mount state. */
+			__u8	signature;  /* extended boot signature */
+			__u8	vol_id[4];	/* volume ID */
+			__u8	vol_label[11];	/* volume label */
+			__u8	fs_type[8];		/* file system type */
 			/* other fiealds are not added here */
 		} fat32;
 	};

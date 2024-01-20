@@ -81,7 +81,6 @@ static int __meminit sparse_index_init(unsigned long section_nr, int nid)
 {
 	unsigned long root = SECTION_NR_TO_ROOT(section_nr);
 	struct mem_section *section;
-	int ret = 0;
 
 	if (mem_section[root])
 		return -EEXIST;
@@ -92,7 +91,7 @@ static int __meminit sparse_index_init(unsigned long section_nr, int nid)
 
 	mem_section[root] = section;
 
-	return ret;
+	return 0;
 }
 #else /* !SPARSEMEM_EXTREME */
 static inline int sparse_index_init(unsigned long section_nr, int nid)
@@ -485,6 +484,9 @@ void __init sparse_init(void)
 	struct page **map_map;
 #endif
 
+	/* see include/linux/mmzone.h 'struct mem_section' definition */
+	BUILD_BUG_ON(!is_power_of_2(sizeof(struct mem_section)));
+
 	/* Setup pageblock_order for HUGETLB_PAGE_SIZE_VARIABLE */
 	set_pageblock_order();
 
@@ -755,6 +757,7 @@ out:
 	return ret;
 }
 
+#ifdef CONFIG_MEMORY_HOTREMOVE
 #ifdef CONFIG_MEMORY_FAILURE
 static void clear_hwpoisoned_pages(struct page *memmap, int nr_pages)
 {
@@ -776,7 +779,6 @@ static inline void clear_hwpoisoned_pages(struct page *memmap, int nr_pages)
 }
 #endif
 
-#ifdef CONFIG_MEMORY_HOTREMOVE
 static void free_section_usemap(struct page *memmap, unsigned long *usemap)
 {
 	struct page *usemap_page;

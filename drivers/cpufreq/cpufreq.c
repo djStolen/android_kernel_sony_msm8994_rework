@@ -148,6 +148,51 @@ static inline u64 get_cpu_idle_time_jiffy(unsigned int cpu, u64 *wall)
 
 	return cputime_to_usecs(idle_time);
 }
+EXPORT_SYMBOL_GPL(have_governor_per_policy);
+
+struct kobject *get_governor_parent_kobj(struct cpufreq_policy *policy)
+{
+	if (have_governor_per_policy())
+		return &policy->kobj;
+	else
+		return cpufreq_global_kobject;
+}
+EXPORT_SYMBOL_GPL(get_governor_parent_kobj);
+
+static inline u64 get_cpu_idle_time_jiffy(unsigned int cpu, u64 *wall)
+{
+	u64 idle_time;
+	u64 cur_wall_time;
+	u64 busy_time;
+
+	cur_wall_time = jiffies64_to_cputime64(get_jiffies_64());
+
+	busy_time = kcpustat_cpu(cpu).cpustat[CPUTIME_USER];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SYSTEM];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_IRQ];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SOFTIRQ];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_STEAL];
+	busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_NICE];
+
+	idle_time = cur_wall_time - busy_time;
+	if (wall)
+		*wall = cputime_to_usecs(cur_wall_time);
+
+	return cputime_to_usecs(idle_time);
+}
+
+u64 get_cpu_idle_time(unsigned int cpu, u64 *wall, int io_busy)
+{
+	u64 idle_time = get_cpu_idle_time_us(cpu, io_busy ? wall : NULL);
+
+	if (idle_time == -1ULL)
+		return get_cpu_idle_time_jiffy(cpu, wall);
+	else if (!io_busy)
+		idle_time += get_cpu_iowait_time_us(cpu, wall);
+
+	return idle_time;
+}
+EXPORT_SYMBOL_GPL(get_cpu_idle_time);
 
 u64 get_cpu_idle_time(unsigned int cpu, u64 *wall, int io_busy)
 {
@@ -290,6 +335,13 @@ static void __cpufreq_notify_transition(struct cpufreq_policy *policy,
 	switch (state) {
 
 	case CPUFREQ_PRECHANGE:
+		if (WARN(policy->transition_ongoing ==
+					cpumask_weight(policy->cpus),
+				"In middle of another frequency transition\n"))
+			return;
+
+		policy->transition_ongoing++;
+
 		/* detect if the driver reported a value as "old frequency"
 		 * which is not equal to what the cpufreq core thinks is
 		 * "old frequency".
@@ -309,6 +361,12 @@ static void __cpufreq_notify_transition(struct cpufreq_policy *policy,
 		break;
 
 	case CPUFREQ_POSTCHANGE:
+		if (WARN(!policy->transition_ongoing,
+				"No frequency transition in progress\n"))
+			return;
+
+		policy->transition_ongoing--;
+
 		adjust_jiffies(CPUFREQ_POSTCHANGE, freqs);
 		pr_debug("FREQ: %lu - CPU: %lu", (unsigned long)freqs->new,
 			(unsigned long)freqs->cpu);
@@ -336,7 +394,6 @@ void cpufreq_notify_transition(struct cpufreq_policy *policy,
 		__cpufreq_notify_transition(policy, freqs, state);
 }
 EXPORT_SYMBOL_GPL(cpufreq_notify_transition);
-
 
 /*********************************************************************
  *                          SYSFS INTERFACE                          *
@@ -557,6 +614,7 @@ out:
 	i += sprintf(&buf[i], "\n");
 	return i;
 }
+EXPORT_SYMBOL_GPL(cpufreq_show_cpus);
 
 ssize_t cpufreq_show_cpus(const struct cpumask *mask, char *buf)
 {
@@ -764,6 +822,49 @@ static struct kobj_type ktype_cpufreq = {
 	.default_attrs	= default_attrs,
 	.release	= cpufreq_sysfs_release,
 };
+
+struct kobject *cpufreq_global_kobject;
+EXPORT_SYMBOL(cpufreq_global_kobject);
+
+static int cpufreq_global_kobject_usage;
+
+int cpufreq_get_global_kobject(void)
+{
+	if (!cpufreq_global_kobject_usage++)
+		return kobject_add(cpufreq_global_kobject,
+				&cpu_subsys.dev_root->kobj, "%s", "cpufreq");
+
+	return 0;
+}
+EXPORT_SYMBOL(cpufreq_get_global_kobject);
+
+void cpufreq_put_global_kobject(void)
+{
+	if (!--cpufreq_global_kobject_usage)
+		kobject_del(cpufreq_global_kobject);
+}
+EXPORT_SYMBOL(cpufreq_put_global_kobject);
+
+int cpufreq_sysfs_create_file(const struct attribute *attr)
+{
+	int ret = cpufreq_get_global_kobject();
+
+	if (!ret) {
+		ret = sysfs_create_file(cpufreq_global_kobject, attr);
+		if (ret)
+			cpufreq_put_global_kobject();
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL(cpufreq_sysfs_create_file);
+
+void cpufreq_sysfs_remove_file(const struct attribute *attr)
+{
+	sysfs_remove_file(cpufreq_global_kobject, attr);
+	cpufreq_put_global_kobject();
+}
+EXPORT_SYMBOL(cpufreq_sysfs_remove_file);
 
 struct kobject *cpufreq_global_kobject;
 EXPORT_SYMBOL(cpufreq_global_kobject);
@@ -1759,6 +1860,8 @@ int __cpufreq_driver_target(struct cpufreq_policy *policy,
 
 	if (cpufreq_disabled())
 		return -ENODEV;
+	if (policy->transition_ongoing)
+		return -EBUSY;
 
 	/* Make sure that target_freq is within supported range */
 	if (target_freq > policy->max)
@@ -1897,6 +2000,14 @@ static int __cpufreq_governor(struct cpufreq_policy *policy,
 			policy->governor->initialized++;
 		else if (event == CPUFREQ_GOV_POLICY_EXIT)
 			policy->governor->initialized--;
+	} else {
+		/* Restore original values */
+		mutex_lock(&cpufreq_governor_lock);
+		if (event == CPUFREQ_GOV_STOP)
+			policy->governor_enabled = true;
+		else if (event == CPUFREQ_GOV_START)
+			policy->governor_enabled = false;
+		mutex_unlock(&cpufreq_governor_lock);
 	}
 
 	if (((event == CPUFREQ_GOV_POLICY_INIT) && ret) ||
@@ -1959,7 +2070,6 @@ void cpufreq_unregister_governor(struct cpufreq_governor *governor)
 	return;
 }
 EXPORT_SYMBOL_GPL(cpufreq_unregister_governor);
-
 
 /*********************************************************************
  *                          POLICY INTERFACE                         *

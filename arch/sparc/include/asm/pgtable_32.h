@@ -413,6 +413,7 @@ __get_iospace (unsigned long addr)
 		return -1;
 	}
 }
+#define io_remap_pfn_range io_remap_pfn_range 
 
 extern unsigned long *sparc_valid_addr_bitmap;
 

@@ -6,6 +6,8 @@
 
 #include <linux/reboot.h>
 
+#include <linux/reboot.h>
+
 struct i2c_gpio_platform_data;
 struct i2c_board_info;
 struct spi_board_info;

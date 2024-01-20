@@ -22,6 +22,9 @@ config GENERIC_STRNCPY_FROM_USER
 config GENERIC_STRNLEN_USER
 	bool
 
+config GENERIC_NET_UTILS
+	bool
+
 config GENERIC_FIND_FIRST_BIT
 	bool
 
@@ -198,6 +201,15 @@ config LZ4HC_COMPRESS
 config LZ4_DECOMPRESS
 	tristate
 
+config LZ4_COMPRESS
+	tristate
+
+config LZ4HC_COMPRESS
+	tristate
+
+config LZ4_DECOMPRESS
+	tristate
+
 source "lib/xz/Kconfig"
 
 #
@@ -220,6 +232,10 @@ config DECOMPRESS_XZ
 
 config DECOMPRESS_LZO
 	select LZO_DECOMPRESS
+	tristate
+
+config DECOMPRESS_LZ4
+	select LZ4_DECOMPRESS
 	tristate
 
 config DECOMPRESS_LZ4
@@ -435,5 +451,7 @@ config QMI_ENCDEC_DEBUG
 	  Kernel config option to enable debugging QMI Encode/Decode
 	  library. This will log the information regarding the element
 	  and message being encoded & decoded.
+
+source "lib/fonts/Kconfig"
 
 endmenu

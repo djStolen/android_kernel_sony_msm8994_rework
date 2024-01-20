@@ -21,6 +21,8 @@
 #include <linux/io.h>
 #include <linux/err.h>
 #include <linux/delay.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
 
 #include <asm/system_misc.h>
 #include <asm/proc-fns.h>
@@ -55,7 +57,7 @@ void mxc_restart(enum reboot_mode mode, const char *cmd)
 	/* wait for reset to assert... */
 	mdelay(500);
 
-	printk(KERN_ERR "Watchdog reset failed to assert reset\n");
+	pr_err("%s: Watchdog reset failed to assert reset\n", __func__);
 
 	/* delay to allow the serial port to show the message */
 	mdelay(50);
@@ -64,7 +66,34 @@ void mxc_restart(enum reboot_mode mode, const char *cmd)
 	soft_restart(0);
 }
 
-void mxc_arch_reset_init(void __iomem *base)
+void __init mxc_arch_reset_init(void __iomem *base)
 {
 	wdog_base = base;
+
+	wdog_clk = clk_get_sys("imx2-wdt.0", NULL);
+	if (IS_ERR(wdog_clk)) {
+		pr_warn("%s: failed to get wdog clock\n", __func__);
+		wdog_clk = NULL;
+		return;
+	}
+
+	clk_prepare(wdog_clk);
+}
+
+void __init mxc_arch_reset_init_dt(void)
+{
+	struct device_node *np;
+
+	np = of_find_compatible_node(NULL, NULL, "fsl,imx21-wdt");
+	wdog_base = of_iomap(np, 0);
+	WARN_ON(!wdog_base);
+
+	wdog_clk = of_clk_get(np, 0);
+	if (IS_ERR(wdog_clk)) {
+		pr_warn("%s: failed to get wdog clock\n", __func__);
+		wdog_clk = NULL;
+		return;
+	}
+
+	clk_prepare(wdog_clk);
 }

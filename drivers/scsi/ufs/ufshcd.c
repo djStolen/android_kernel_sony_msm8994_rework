@@ -669,6 +669,20 @@ static inline u32 ufshcd_get_intr_mask(struct ufs_hba *hba)
 }
 
 /**
+ * ufshcd_get_intr_mask - Get the interrupt bit mask
+ * @hba - Pointer to adapter instance
+ *
+ * Returns interrupt bit mask per version
+ */
+static inline u32 ufshcd_get_intr_mask(struct ufs_hba *hba)
+{
+	if (hba->ufs_version == UFSHCI_VERSION_10)
+		return INTERRUPT_MASK_ALL_VER_10;
+	else
+		return INTERRUPT_MASK_ALL_VER_11;
+}
+
+/**
  * ufshcd_get_ufs_version - Get the UFS version supported by the HBA
  * @hba - Pointer to adapter instance
  *
@@ -4850,6 +4864,19 @@ static void __ufshcd_transfer_req_compl(struct ufs_hba *hba,
 }
 
 /**
+ * ufshcd_uic_cmd_compl - handle completion of uic command
+ * @hba: per adapter instance
+ */
+static void ufshcd_uic_cmd_compl(struct ufs_hba *hba)
+{
+	if (hba->active_uic_cmd) {
+		hba->active_uic_cmd->argument2 |=
+			ufshcd_get_uic_cmd_result(hba);
+		complete(&hba->active_uic_cmd->done);
+	}
+}
+
+/**
  * ufshcd_transfer_req_compl - handle SCSI and query command completion
  * @hba: per adapter instance
  */
@@ -6721,6 +6748,21 @@ static enum blk_eh_timer_return ufshcd_eh_timed_out(struct scsi_cmnd *scmd)
 	return found ? BLK_EH_NOT_HANDLED : BLK_EH_RESET_TIMER;
 }
 
+/**
+ * ufshcd_async_scan - asynchronous execution for link startup
+ * @data: data pointer to pass to this function
+ * @cookie: cookie data
+ */
+static void ufshcd_async_scan(void *data, async_cookie_t cookie)
+{
+	struct ufs_hba *hba = (struct ufs_hba *)data;
+	int ret;
+
+	ret = ufshcd_link_startup(hba);
+	if (!ret)
+		scsi_scan_host(hba->host);
+}
+
 static struct scsi_host_template ufshcd_driver_template = {
 	.module			= THIS_MODULE,
 	.name			= UFSHCD,
@@ -8321,6 +8363,9 @@ int ufshcd_init(struct ufs_hba *hba, void __iomem *mmio_base, unsigned int irq)
 		dev_err(hba->dev, "set dma mask failed\n");
 		goto out_disable;
 	}
+
+	/* Get Interrupt bit mask per version */
+	hba->intr_mask = ufshcd_get_intr_mask(hba);
 
 	/* Allocate memory for host memory space */
 	err = ufshcd_memory_alloc(hba);

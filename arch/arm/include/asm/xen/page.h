@@ -1,7 +1,6 @@
 #ifndef _ASM_ARM_XEN_PAGE_H
 #define _ASM_ARM_XEN_PAGE_H
 
-#include <asm/mach/map.h>
 #include <asm/page.h>
 #include <asm/pgtable.h>
 

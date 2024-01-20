@@ -47,7 +47,7 @@
 #define MTD_PARAM_LEN_MAX 64
 
 /* Maximum number of comma-separated items in the 'mtd=' parameter */
-#define MTD_PARAM_MAX_COUNT 3
+#define MTD_PARAM_MAX_COUNT 4
 
 /* Maximum value for the number of bad PEBs per 1024 PEBs */
 #define MAX_MTD_UBI_BEB_LIMIT 768
@@ -67,6 +67,7 @@
  */
 struct mtd_dev_param {
 	char name[MTD_PARAM_LEN_MAX];
+	int ubi_num;
 	int vid_hdr_offs;
 	int max_beb_per1024;
 };
@@ -1063,7 +1064,7 @@ int ubi_attach_mtd_dev(struct mtd_info *mtd, int ubi_num,
 	if (err)
 		goto out_uif;
 
-	ubi->bgt_thread = kthread_create(ubi_thread, ubi, ubi->bgt_name);
+	ubi->bgt_thread = kthread_create(ubi_thread, ubi, "%s", ubi->bgt_name);
 	if (IS_ERR(ubi->bgt_thread)) {
 		err = PTR_ERR(ubi->bgt_thread);
 		ubi_err(ubi->ubi_num, "cannot spawn \"%s\", error %d",

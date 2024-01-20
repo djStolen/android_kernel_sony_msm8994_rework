@@ -64,6 +64,7 @@ static int gfs2_encode_fh(struct inode *inode, __u32 *p, int *len,
 }
 
 struct get_name_filldir {
+	struct dir_context ctx;
 	struct gfs2_inum_host inum;
 	char *name;
 };

@@ -785,9 +785,7 @@ cond_branch:			f_offset = addrs[i + filter[i].jf];
 			break;
 		}
 		if (proglen == oldproglen) {
-			image = module_alloc(max_t(unsigned int,
-						   proglen,
-						   sizeof(struct work_struct)));
+			image = module_alloc(proglen);
 			if (!image)
 				goto out;
 		}

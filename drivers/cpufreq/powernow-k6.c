@@ -56,7 +56,7 @@ static int powernow_k6_get_cpu_multiplier(void)
 	msrval = POWERNOW_IOPORT + 0x0;
 	wrmsr(MSR_K6_EPMR, msrval, 0); /* disable it again */
 
-	return clock_ratio[(invalue >> 5)&7].index;
+	return clock_ratio[(invalue >> 5)&7].driver_data;
 }
 
 /**

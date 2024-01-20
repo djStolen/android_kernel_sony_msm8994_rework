@@ -364,7 +364,7 @@ int genl_unregister_ops(struct genl_family *family, struct genl_ops *ops)
 EXPORT_SYMBOL(genl_unregister_ops);
 
 /**
- * genl_register_family - register a generic netlink family
+ * __genl_register_family - register a generic netlink family
  * @family: generic netlink family
  *
  * Registers the specified family after validating it first. Only one
@@ -374,7 +374,7 @@ EXPORT_SYMBOL(genl_unregister_ops);
  *
  * Return 0 on success or a negative error code.
  */
-int genl_register_family(struct genl_family *family)
+int __genl_register_family(struct genl_family *family)
 {
 	int err = -EINVAL;
 
@@ -430,10 +430,10 @@ errout_locked:
 errout:
 	return err;
 }
-EXPORT_SYMBOL(genl_register_family);
+EXPORT_SYMBOL(__genl_register_family);
 
 /**
- * genl_register_family_with_ops - register a generic netlink family
+ * __genl_register_family_with_ops - register a generic netlink family
  * @family: generic netlink family
  * @ops: operations to be registered
  * @n_ops: number of elements to register
@@ -457,12 +457,12 @@ EXPORT_SYMBOL(genl_register_family);
  *
  * Return 0 on success or a negative error code.
  */
-int genl_register_family_with_ops(struct genl_family *family,
+int __genl_register_family_with_ops(struct genl_family *family,
 	struct genl_ops *ops, size_t n_ops)
 {
 	int err, i;
 
-	err = genl_register_family(family);
+	err = __genl_register_family(family);
 	if (err)
 		return err;
 
@@ -476,7 +476,7 @@ err_out:
 	genl_unregister_family(family);
 	return err;
 }
-EXPORT_SYMBOL(genl_register_family_with_ops);
+EXPORT_SYMBOL(__genl_register_family_with_ops);
 
 /**
  * genl_unregister_family - unregister generic netlink family
@@ -553,6 +553,30 @@ static int genl_lock_start(struct netlink_callback *cb)
 	if (ops->start) {
 		genl_lock();
 		rc = ops->start(cb);
+		genl_unlock();
+	}
+	return rc;
+}
+
+static int genl_lock_dumpit(struct sk_buff *skb, struct netlink_callback *cb)
+{
+	struct genl_ops *ops = cb->data;
+	int rc;
+
+	genl_lock();
+	rc = ops->dumpit(skb, cb);
+	genl_unlock();
+	return rc;
+}
+
+static int genl_lock_done(struct netlink_callback *cb)
+{
+	struct genl_ops *ops = cb->data;
+	int rc = 0;
+
+	if (ops->done) {
+		genl_lock();
+		rc = ops->done(cb);
 		genl_unlock();
 	}
 	return rc;
@@ -891,8 +915,10 @@ static int ctrl_getfamily(struct sk_buff *skb, struct genl_info *info)
 #ifdef CONFIG_MODULES
 		if (res == NULL) {
 			genl_unlock();
+			up_read(&cb_lock);
 			request_module("net-pf-%d-proto-%d-family-%s",
 				       PF_NETLINK, NETLINK_GENERIC, name);
+			down_read(&cb_lock);
 			genl_lock();
 			res = genl_family_find_byname(name);
 		}

@@ -249,7 +249,7 @@ config USB_EHCI_MSM_UICC
 	  controller serial lines into USB DP and DM signals.
 
 config USB_EHCI_TEGRA
-       boolean "NVIDIA Tegra HCD support"
+       tristate "NVIDIA Tegra HCD support"
        depends on ARCH_TEGRA
        select USB_EHCI_ROOT_HUB_TT
        select USB_PHY
@@ -274,7 +274,7 @@ config USB_EHCI_SH
 
 config USB_EHCI_S5P
        tristate "EHCI support for Samsung S5P/EXYNOS SoC Series"
-       depends on PLAT_S5P
+       depends on PLAT_S5P || ARCH_EXYNOS
        help
 	Enable support for the Samsung S5Pxxxx and Exynos3/4/5 SOC's
 	on-chip EHCI controller.
@@ -334,7 +334,7 @@ config USB_EHCI_HCD_PLATFORM
 
 config USB_OCTEON_EHCI
 	bool "Octeon on-chip EHCI support"
-	depends on CPU_CAVIUM_OCTEON
+	depends on CAVIUM_OCTEON_SOC
 	default n
 	select USB_EHCI_BIG_ENDIAN_MMIO
 	help
@@ -477,8 +477,8 @@ config USB_OHCI_HCD_PPC_OF
 	default USB_OHCI_HCD_PPC_OF_BE || USB_OHCI_HCD_PPC_OF_LE
 
 config USB_OHCI_HCD_PCI
-	bool "OHCI support for PCI-bus USB controllers"
-	depends on PCI && (STB03xxx || PPC_MPC52xx || USB_OHCI_HCD_PPC_OF)
+	tristate "OHCI support for PCI-bus USB controllers"
+	depends on PCI
 	default y
 	select USB_OHCI_LITTLE_ENDIAN
 	---help---
@@ -532,7 +532,7 @@ config USB_CNS3XXX_OHCI
 	  It is needed for low-speed USB 1.0 device support.
 
 config USB_OHCI_HCD_PLATFORM
-	bool "Generic OHCI driver for a platform device"
+	tristate "Generic OHCI driver for a platform device"
 	default n
 	---help---
 	  Adds an OHCI host driver for a generic platform device, which
@@ -542,7 +542,7 @@ config USB_OHCI_HCD_PLATFORM
 
 config USB_OCTEON_OHCI
 	bool "Octeon on-chip OHCI support"
-	depends on CPU_CAVIUM_OCTEON
+	depends on CAVIUM_OCTEON_SOC
 	default USB_OCTEON_EHCI
 	select USB_OHCI_BIG_ENDIAN_MMIO
 	select USB_OHCI_LITTLE_ENDIAN

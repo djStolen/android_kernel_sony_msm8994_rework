@@ -6,6 +6,11 @@ struct sleep_save_sp {
 	u32 save_ptr_stash_phys;
 };
 
+struct sleep_save_sp {
+	u32 *save_ptr_stash;
+	u32 save_ptr_stash_phys;
+};
+
 extern void cpu_resume(void);
 extern int cpu_suspend(unsigned long, int (*)(unsigned long));
 

@@ -19,9 +19,6 @@ unsigned long empty_zero_page;
 void __init
 mem_init(void)
 {
-	int codesize, reservedpages, datasize, initsize;
-	unsigned long tmp;
-
 	BUG_ON(!mem_map);
 
 	/* max/min_low_pfn was set by setup.c
@@ -65,5 +62,5 @@ mem_init(void)
 void 
 free_initmem(void)
 {
-	free_initmem_default(0);
+	free_initmem_default(-1);
 }

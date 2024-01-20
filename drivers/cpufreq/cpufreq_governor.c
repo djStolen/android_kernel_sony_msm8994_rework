@@ -281,6 +281,9 @@ int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 		if (!have_governor_per_policy())
 			WARN_ON(cpufreq_get_global_kobject());
 
+		if (!have_governor_per_policy())
+			WARN_ON(cpufreq_get_global_kobject());
+
 		rc = sysfs_create_group(get_governor_parent_kobj(policy),
 				get_sysfs_attr(dbs_data));
 		if (rc) {
@@ -322,6 +325,9 @@ int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 			if (!have_governor_per_policy())
 				cpufreq_put_global_kobject();
 
+			if (!have_governor_per_policy())
+				cpufreq_put_global_kobject();
+
 			if ((dbs_data->cdata->governor == GOV_CONSERVATIVE) &&
 				(policy->governor->initialized == 1)) {
 				struct cs_ops *cs_ops = dbs_data->cdata->gov_ops;
@@ -345,12 +351,12 @@ int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 		cs_tuners = dbs_data->tuners;
 		cs_dbs_info = dbs_data->cdata->get_cpu_dbs_info_s(cpu);
 		sampling_rate = cs_tuners->sampling_rate;
-		ignore_nice = cs_tuners->ignore_nice;
+		ignore_nice = cs_tuners->ignore_nice_load;
 	} else {
 		od_tuners = dbs_data->tuners;
 		od_dbs_info = dbs_data->cdata->get_cpu_dbs_info_s(cpu);
 		sampling_rate = od_tuners->sampling_rate;
-		ignore_nice = od_tuners->ignore_nice;
+		ignore_nice = od_tuners->ignore_nice_load;
 		od_ops = dbs_data->cdata->gov_ops;
 		io_busy = od_tuners->io_is_busy;
 	}

@@ -2448,6 +2448,11 @@ struct locks_iterator {
 	loff_t	li_pos;
 };
 
+struct locks_iterator {
+	int	li_cpu;
+	loff_t	li_pos;
+};
+
 static void lock_get_status(struct seq_file *f, struct file_lock *fl,
 			    loff_t id, char *pfx)
 {

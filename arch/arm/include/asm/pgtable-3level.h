@@ -33,7 +33,7 @@
 #define PTRS_PER_PMD		512
 #define PTRS_PER_PGD		4
 
-#define PTE_HWTABLE_PTRS	(PTRS_PER_PTE)
+#define PTE_HWTABLE_PTRS	(0)
 #define PTE_HWTABLE_OFF		(0)
 #define PTE_HWTABLE_SIZE	(PTRS_PER_PTE * sizeof(u64))
 
@@ -48,18 +48,26 @@
 #define PMD_SHIFT		21
 
 #define PMD_SIZE		(1UL << PMD_SHIFT)
-#define PMD_MASK		(~(PMD_SIZE-1))
+#define PMD_MASK		(~((1 << PMD_SHIFT) - 1))
 #define PGDIR_SIZE		(1UL << PGDIR_SHIFT)
-#define PGDIR_MASK		(~(PGDIR_SIZE-1))
+#define PGDIR_MASK		(~((1 << PGDIR_SHIFT) - 1))
 
 /*
  * section address mask and size definitions.
  */
 #define SECTION_SHIFT		21
 #define SECTION_SIZE		(1UL << SECTION_SHIFT)
-#define SECTION_MASK		(~(SECTION_SIZE-1))
+#define SECTION_MASK		(~((1 << SECTION_SHIFT) - 1))
 
 #define USER_PTRS_PER_PGD	(PAGE_OFFSET / PGDIR_SIZE)
+
+/*
+ * Hugetlb definitions.
+ */
+#define HPAGE_SHIFT		PMD_SHIFT
+#define HPAGE_SIZE		(_AC(1, UL) << HPAGE_SHIFT)
+#define HPAGE_MASK		(~(HPAGE_SIZE - 1))
+#define HUGETLB_PAGE_ORDER	(HPAGE_SHIFT - PAGE_SHIFT)
 
 /*
  * "Linux" PTE definitions for LPAE.
@@ -78,6 +86,11 @@
 #define L_PTE_DIRTY		(_AT(pteval_t, 1) << 55)	/* unused */
 #define L_PTE_SPECIAL		(_AT(pteval_t, 1) << 56)	/* unused */
 #define L_PTE_NONE		(_AT(pteval_t, 1) << 57)	/* PROT_NONE */
+
+#define PMD_SECT_VALID		(_AT(pmdval_t, 1) << 0)
+#define PMD_SECT_DIRTY		(_AT(pmdval_t, 1) << 55)
+#define PMD_SECT_SPLITTING	(_AT(pmdval_t, 1) << 56)
+#define PMD_SECT_NONE		(_AT(pmdval_t, 1) << 57)
 
 #define PMD_SECT_VALID		(_AT(pmdval_t, 1) << 0)
 #define PMD_SECT_DIRTY		(_AT(pmdval_t, 1) << 55)

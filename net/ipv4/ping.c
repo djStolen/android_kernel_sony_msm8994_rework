@@ -74,6 +74,7 @@ static inline struct hlist_nulls_head *ping_hashslot(struct ping_table *table,
 {
 	return &table->hash[ping_hashfn(net, num, PING_HTABLE_MASK)];
 }
+EXPORT_SYMBOL_GPL(ping_hash);
 
 int ping_get_port(struct sock *sk, unsigned short ident)
 {
@@ -637,6 +638,7 @@ static int ping_v4_push_pending_frames(struct sock *sk, struct pingfakehdr *pfh,
 	skb->ip_summed = CHECKSUM_NONE;
 	return ip_push_pending_frames(sk, fl4);
 }
+EXPORT_SYMBOL_GPL(ping_queue_rcv_skb);
 
 int ping_common_sendmsg(int family, struct msghdr *msg, size_t len,
 			void *user_icmph, size_t icmph_len) {
@@ -840,6 +842,7 @@ do_confirm:
 	err = 0;
 	goto out;
 }
+EXPORT_SYMBOL_GPL(ping_rcv);
 
 int ping_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 		 size_t len, int noblock, int flags, int *addr_len)
@@ -1026,7 +1029,8 @@ static struct sock *ping_get_first(struct seq_file *seq, int start)
 			continue;
 
 		sk_nulls_for_each(sk, node, hslot) {
-			if (net_eq(sock_net(sk), net))
+			if (net_eq(sock_net(sk), net) &&
+			    sk->sk_family == state->family)
 				goto found;
 		}
 	}
@@ -1059,17 +1063,24 @@ static struct sock *ping_get_idx(struct seq_file *seq, loff_t pos)
 	return pos ? NULL : sk;
 }
 
-static void *ping_seq_start(struct seq_file *seq, loff_t *pos)
+void *ping_seq_start(struct seq_file *seq, loff_t *pos, sa_family_t family)
 {
 	struct ping_iter_state *state = seq->private;
 	state->bucket = 0;
+	state->family = family;
 
 	read_lock_bh(&ping_table.lock);
 
 	return *pos ? ping_get_idx(seq, *pos-1) : SEQ_START_TOKEN;
 }
+EXPORT_SYMBOL_GPL(ping_seq_start);
 
-static void *ping_seq_next(struct seq_file *seq, void *v, loff_t *pos)
+static void *ping_v4_seq_start(struct seq_file *seq, loff_t *pos)
+{
+	return ping_seq_start(seq, pos, AF_INET);
+}
+
+void *ping_seq_next(struct seq_file *seq, void *v, loff_t *pos)
 {
 	struct sock *sk;
 
@@ -1108,7 +1119,7 @@ static void ping_format_sock(struct sock *sp, struct seq_file *f,
 		atomic_read(&sp->sk_drops));
 }
 
-static int ping_seq_show(struct seq_file *seq, void *v)
+static int ping_v4_seq_show(struct seq_file *seq, void *v)
 {
 	seq_setwidth(seq, 127);
 	if (v == SEQ_START_TOKEN)

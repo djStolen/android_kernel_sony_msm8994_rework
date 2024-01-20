@@ -15,6 +15,8 @@
 
 #include <linux/reboot.h>
 
+#include <linux/reboot.h>
+
 #include <asm/types.h>
 
 #ifndef	__ARMEB__

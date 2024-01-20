@@ -169,7 +169,7 @@ void
 free_initmem(void)
 {
 #ifdef CONFIG_RAMKERNEL
-	free_initmem_default(0);
+	free_initmem_default(-1);
 #endif
 }
 

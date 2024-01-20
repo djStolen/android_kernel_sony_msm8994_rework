@@ -671,7 +671,23 @@ static int mmc_compare_ext_csds(struct mmc_card *card, unsigned bus_width)
 		(card->ext_csd.raw_sectors[2] ==
 			bw_ext_csd[EXT_CSD_SEC_CNT + 2]) &&
 		(card->ext_csd.raw_sectors[3] ==
-			bw_ext_csd[EXT_CSD_SEC_CNT + 3]));
+			bw_ext_csd[EXT_CSD_SEC_CNT + 3]) &&
+		(card->ext_csd.raw_pwr_cl_52_195 ==
+			bw_ext_csd[EXT_CSD_PWR_CL_52_195]) &&
+		(card->ext_csd.raw_pwr_cl_26_195 ==
+			bw_ext_csd[EXT_CSD_PWR_CL_26_195]) &&
+		(card->ext_csd.raw_pwr_cl_52_360 ==
+			bw_ext_csd[EXT_CSD_PWR_CL_52_360]) &&
+		(card->ext_csd.raw_pwr_cl_26_360 ==
+			bw_ext_csd[EXT_CSD_PWR_CL_26_360]) &&
+		(card->ext_csd.raw_pwr_cl_200_195 ==
+			bw_ext_csd[EXT_CSD_PWR_CL_200_195]) &&
+		(card->ext_csd.raw_pwr_cl_200_360 ==
+			bw_ext_csd[EXT_CSD_PWR_CL_200_360]) &&
+		(card->ext_csd.raw_pwr_cl_ddr_52_195 ==
+			bw_ext_csd[EXT_CSD_PWR_CL_DDR_52_195]) &&
+		(card->ext_csd.raw_pwr_cl_ddr_52_360 ==
+			bw_ext_csd[EXT_CSD_PWR_CL_DDR_52_360]));
 	if (err)
 		err = -EINVAL;
 
@@ -757,20 +773,16 @@ static struct device_type mmc_type = {
  * mmc_switch command.
  */
 static int mmc_select_powerclass(struct mmc_card *card,
-		unsigned int bus_width, u8 *ext_csd)
+		unsigned int bus_width)
 {
 	int err = 0;
-	unsigned int pwrclass_val;
-	unsigned int index = 0;
+	unsigned int pwrclass_val = 0;
 	struct mmc_host *host;
 
 	BUG_ON(!card);
 
 	host = card->host;
 	BUG_ON(!host);
-
-	if (ext_csd == NULL)
-		return 0;
 
 	/* Power class selection is supported for versions >= 4.0 */
 	if (card->csd.mmca_vsn < CSD_SPEC_VER_4)
@@ -783,13 +795,13 @@ static int mmc_select_powerclass(struct mmc_card *card,
 	switch (1 << host->ios.vdd) {
 	case MMC_VDD_165_195:
 		if (host->ios.clock <= 26000000)
-			index = EXT_CSD_PWR_CL_26_195;
+			pwrclass_val = card->ext_csd.raw_pwr_cl_26_195;
 		else if	(host->ios.clock <= 52000000)
-			index = (bus_width <= EXT_CSD_BUS_WIDTH_8) ?
-				EXT_CSD_PWR_CL_52_195 :
-				EXT_CSD_PWR_CL_DDR_52_195;
+			pwrclass_val = (bus_width <= EXT_CSD_BUS_WIDTH_8) ?
+				card->ext_csd.raw_pwr_cl_52_195 :
+				card->ext_csd.raw_pwr_cl_ddr_52_195;
 		else if (host->ios.clock <= 200000000)
-			index = EXT_CSD_PWR_CL_200_195;
+			pwrclass_val = card->ext_csd.raw_pwr_cl_200_195;
 		break;
 	case MMC_VDD_27_28:
 	case MMC_VDD_28_29:
@@ -816,8 +828,6 @@ static int mmc_select_powerclass(struct mmc_card *card,
 			   "for power class.\n", mmc_hostname(host));
 		return -EINVAL;
 	}
-
-	pwrclass_val = ext_csd[index];
 
 	if (bus_width & (EXT_CSD_BUS_WIDTH_8 | EXT_CSD_DDR_BUS_WIDTH_8))
 		pwrclass_val = (pwrclass_val & EXT_CSD_PWR_CL_8BIT_MASK) >>
@@ -1740,6 +1750,45 @@ free_card:
 		mmc_remove_card(card);
 	}
 err:
+	return err;
+}
+
+static int mmc_can_sleep(struct mmc_card *card)
+{
+	return (card && card->ext_csd.rev >= 3);
+}
+
+static int mmc_sleep(struct mmc_host *host)
+{
+	struct mmc_command cmd = {0};
+	struct mmc_card *card = host->card;
+	int err;
+
+	if (host->caps2 & MMC_CAP2_NO_SLEEP_CMD)
+		return 0;
+
+	err = mmc_deselect_cards(host);
+	if (err)
+		return err;
+
+	cmd.opcode = MMC_SLEEP_AWAKE;
+	cmd.arg = card->rca << 16;
+	cmd.arg |= 1 << 15;
+
+	cmd.flags = MMC_RSP_R1B | MMC_CMD_AC;
+	err = mmc_wait_for_cmd(host, &cmd, 0);
+	if (err)
+		return err;
+
+	/*
+	 * If the host does not wait while the card signals busy, then we will
+	 * will have to wait the sleep/awake timeout.  Note, we cannot use the
+	 * SEND_STATUS command to poll the status because that command (and most
+	 * others) is invalid while the card sleeps.
+	 */
+	if (!(host->caps & MMC_CAP_WAIT_WHILE_BUSY))
+		mmc_delay(DIV_ROUND_UP(card->ext_csd.sa_timeout, 10000));
+
 	return err;
 }
 

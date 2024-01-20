@@ -499,7 +499,7 @@ static void __init arch_counter_register(unsigned type)
 	sched_clock_register(arch_timer_read_counter, 56, arch_timer_rate);
 }
 
-static void __cpuinit arch_timer_stop(struct clock_event_device *clk)
+static void arch_timer_stop(struct clock_event_device *clk)
 {
 	pr_debug("arch_timer_teardown disable IRQ%d cpu #%d\n",
 		 clk->irq, smp_processor_id());
@@ -515,7 +515,7 @@ static void __cpuinit arch_timer_stop(struct clock_event_device *clk)
 	clk->set_mode(CLOCK_EVT_MODE_UNUSED, clk);
 }
 
-static int __cpuinit arch_timer_cpu_notify(struct notifier_block *self,
+static int arch_timer_cpu_notify(struct notifier_block *self,
 					   unsigned long action, void *hcpu)
 {
 	/*
@@ -534,7 +534,7 @@ static int __cpuinit arch_timer_cpu_notify(struct notifier_block *self,
 	return NOTIFY_OK;
 }
 
-static struct notifier_block arch_timer_cpu_nb __cpuinitdata = {
+static struct notifier_block arch_timer_cpu_nb = {
 	.notifier_call = arch_timer_cpu_notify,
 };
 
@@ -721,11 +721,6 @@ static void __init arch_timer_init(struct device_node *np)
 			return;
 		}
 	}
-
-	if (arch_timer_use_virtual)
-		arch_timer_read_counter = arch_counter_get_cntvct;
-	else
-		arch_timer_read_counter = arch_counter_get_cntpct;
 
 	arch_timer_register();
 	arch_timer_common_init();

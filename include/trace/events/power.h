@@ -5,6 +5,7 @@
 #define _TRACE_POWER_H
 
 #include <linux/ktime.h>
+#include <linux/pm_qos.h>
 #include <linux/tracepoint.h>
 
 DECLARE_EVENT_CLASS(cpu,

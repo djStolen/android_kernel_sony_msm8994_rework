@@ -34,7 +34,6 @@ DEFINE_PER_CPU(struct tick_device, tick_cpu_device);
 ktime_t tick_next_period;
 ktime_t tick_period;
 int tick_do_timer_cpu __read_mostly = TICK_DO_TIMER_BOOT;
-static DEFINE_RAW_SPINLOCK(tick_device_lock);
 
 /*
  * Debugging: see timer_list.c
@@ -195,7 +194,8 @@ static void tick_setup_device(struct tick_device *td,
 	 * When global broadcasting is active, check if the current
 	 * device is registered as a placeholder for broadcast mode.
 	 * This allows us to handle this x86 misfeature in a generic
-	 * way.
+	 * way. This function also returns !=0 when we keep the
+	 * current active broadcast state for this CPU.
 	 */
 	if (tick_device_uses_broadcast(newdev, cpu))
 		return;

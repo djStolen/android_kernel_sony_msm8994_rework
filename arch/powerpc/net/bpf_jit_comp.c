@@ -650,8 +650,7 @@ void bpf_jit_compile(struct sk_filter *fp)
 
 	proglen = cgctx.idx * 4;
 	alloclen = proglen + FUNCTION_DESCR_SIZE;
-	image = module_alloc(max_t(unsigned int, alloclen,
-				   sizeof(struct work_struct)));
+	image = module_alloc(alloclen);
 	if (!image)
 		goto out;
 

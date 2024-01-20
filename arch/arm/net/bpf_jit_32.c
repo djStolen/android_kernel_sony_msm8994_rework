@@ -900,8 +900,7 @@ void bpf_jit_compile(struct sk_filter *fp)
 #endif
 
 	alloc_size = 4 * ctx.idx;
-	ctx.target = module_alloc(max(sizeof(struct work_struct),
-				      alloc_size));
+	ctx.target = module_alloc(alloc_size);
 	if (unlikely(ctx.target == NULL))
 		goto out;
 

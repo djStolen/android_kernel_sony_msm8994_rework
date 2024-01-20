@@ -233,8 +233,8 @@ static int ext4_do_flush_completed_IO(struct inode *inode)
 	int err, ret = 0;
 
 	spin_lock_irqsave(&ei->i_completed_io_lock, flags);
-	dump_completed_IO(inode);
-	list_replace_init(&ei->i_completed_io_list, &unwritten);
+	dump_completed_IO(inode, head);
+	list_replace_init(head, &unwritten);
 	spin_unlock_irqrestore(&ei->i_completed_io_lock, flags);
 
 	while (!list_empty(&unwritten)) {

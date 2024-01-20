@@ -13,6 +13,8 @@
 
 #include <linux/reboot.h>
 
+#include <linux/reboot.h>
+
 extern void cns3xxx_timer_init(void);
 
 #ifdef CONFIG_CACHE_L2X0

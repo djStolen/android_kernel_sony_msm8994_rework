@@ -232,7 +232,7 @@ static unsigned long scan_swap_map(struct swap_info_struct *si,
 			si->cluster_nr = SWAPFILE_CLUSTER - 1;
 			goto checks;
 		}
-		if (si->flags & SWP_DISCARDABLE) {
+		if (si->flags & SWP_PAGE_DISCARD) {
 			/*
 			 * Start range check on racing allocations, in case
 			 * they overlap the cluster we eventually decide on
@@ -342,7 +342,7 @@ checks:
 
 	if (si->lowest_alloc) {
 		/*
-		 * Only set when SWP_DISCARDABLE, and there's a scan
+		 * Only set when SWP_PAGE_DISCARD, and there's a scan
 		 * for a free cluster in progress or just completed.
 		 */
 		if (found_free_cluster) {
@@ -932,6 +932,21 @@ unsigned int count_swap_pages(int type, int free)
 }
 #endif /* CONFIG_HIBERNATION */
 
+static inline int maybe_same_pte(pte_t pte, pte_t swp_pte)
+{
+#ifdef CONFIG_MEM_SOFT_DIRTY
+	/*
+	 * When pte keeps soft dirty bit the pte generated
+	 * from swap entry does not has it, still it's same
+	 * pte from logical point of view.
+	 */
+	pte_t swp_pte_dirty = pte_swp_mksoft_dirty(swp_pte);
+	return pte_same(pte, swp_pte) || pte_same(pte, swp_pte_dirty);
+#else
+	return pte_same(pte, swp_pte);
+#endif
+}
+
 /*
  * No need to decide whether this PTE shares the swap entry with others,
  * just let do_wp_page work it out if a write is requested later - to
@@ -958,7 +973,7 @@ static int unuse_pte(struct vm_area_struct *vma, pmd_t *pmd,
 	}
 
 	pte = pte_offset_map_lock(vma->vm_mm, pmd, addr, &ptl);
-	if (unlikely(!pte_same(*pte, swp_entry_to_pte(entry)))) {
+	if (unlikely(!maybe_same_pte(*pte, swp_entry_to_pte(entry)))) {
 		mem_cgroup_cancel_charge_swapin(memcg);
 		ret = 0;
 		goto out;
@@ -1013,7 +1028,7 @@ static int unuse_pte_range(struct vm_area_struct *vma, pmd_t *pmd,
 		 * swapoff spends a _lot_ of time in this loop!
 		 * Test inline before going to call unuse_pte.
 		 */
-		if (unlikely(pte_same(*pte, swp_pte))) {
+		if (unlikely(maybe_same_pte(*pte, swp_pte))) {
 			pte_unmap(pte);
 			ret = unuse_pte(vma, pmd, addr, entry, page);
 			if (ret)
@@ -2082,6 +2097,20 @@ static int setup_swap_map_and_extents(struct swap_info_struct *p,
 	return nr_extents;
 }
 
+/*
+ * Helper to sys_swapon determining if a given swap
+ * backing device queue supports DISCARD operations.
+ */
+static bool swap_discardable(struct swap_info_struct *si)
+{
+	struct request_queue *q = bdev_get_queue(si->bdev);
+
+	if (!q || !blk_queue_discard(q))
+		return false;
+
+	return true;
+}
+
 SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 {
 	struct swap_info_struct *p;
@@ -2203,11 +2232,13 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 	enable_swap_info(p, prio, swap_map, frontswap_map);
 
 	printk(KERN_INFO "Adding %uk swap on %s.  "
-			"Priority:%d extents:%d across:%lluk %s%s%s\n",
+			"Priority:%d extents:%d across:%lluk %s%s%s%s%s\n",
 		p->pages<<(PAGE_SHIFT-10), name->name, p->prio,
 		nr_extents, (unsigned long long)span<<(PAGE_SHIFT-10),
 		(p->flags & SWP_SOLIDSTATE) ? "SS" : "",
 		(p->flags & SWP_DISCARDABLE) ? "D" : "",
+		(p->flags & SWP_AREA_DISCARD) ? "s" : "",
+		(p->flags & SWP_PAGE_DISCARD) ? "c" : "",
 		(frontswap_map) ? "FS" : "");
 
 	mutex_unlock(&swapon_mutex);

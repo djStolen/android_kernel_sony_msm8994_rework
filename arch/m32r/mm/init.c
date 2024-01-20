@@ -40,7 +40,6 @@ unsigned long mmu_context_cache_dat;
 #else
 unsigned long mmu_context_cache_dat[NR_CPUS];
 #endif
-static unsigned long hole_pages;
 
 /*
  * function prototype
@@ -57,7 +56,7 @@ void free_initrd_mem(unsigned long, unsigned long);
 #define MAX_LOW_PFN(nid)	(NODE_DATA(nid)->bdata->node_low_pfn)
 
 #ifndef CONFIG_DISCONTIGMEM
-unsigned long __init zone_sizes_init(void)
+void __init zone_sizes_init(void)
 {
 	unsigned long  zones_size[MAX_NR_ZONES] = {0, };
 	unsigned long  max_dma;
@@ -83,11 +82,9 @@ unsigned long __init zone_sizes_init(void)
 #endif /* CONFIG_MMU */
 
 	free_area_init_node(0, zones_size, start_pfn, 0);
-
-	return 0;
 }
 #else	/* CONFIG_DISCONTIGMEM */
-extern unsigned long zone_sizes_init(void);
+extern void zone_sizes_init(void);
 #endif	/* CONFIG_DISCONTIGMEM */
 
 /*======================================================================*
@@ -105,24 +102,7 @@ void __init paging_init(void)
 	for (i = 0 ; i < USER_PTRS_PER_PGD * 2 ; i++)
 		pgd_val(pg_dir[i]) = 0;
 #endif /* CONFIG_MMU */
-	hole_pages = zone_sizes_init();
-}
-
-int __init reservedpages_count(void)
-{
-	int reservedpages, nid, i;
-
-	reservedpages = 0;
-	for_each_online_node(nid) {
-		unsigned long flags;
-		pgdat_resize_lock(NODE_DATA(nid), &flags);
-		for (i = 0 ; i < MAX_LOW_PFN(nid) - START_PFN(nid) ; i++)
-			if (PageReserved(nid_page_nr(nid, i)))
-				reservedpages++;
-		pgdat_resize_unlock(NODE_DATA(nid), &flags);
-	}
-
-	return reservedpages;
+	zone_sizes_init();
 }
 
 /*======================================================================*
@@ -181,7 +161,7 @@ void __init mem_init(void)
  *======================================================================*/
 void free_initmem(void)
 {
-	free_initmem_default(0);
+	free_initmem_default(-1);
 }
 
 #ifdef CONFIG_BLK_DEV_INITRD
@@ -191,6 +171,6 @@ void free_initmem(void)
  *======================================================================*/
 void free_initrd_mem(unsigned long start, unsigned long end)
 {
-	free_reserved_area(start, end, 0, "initrd");
+	free_reserved_area((void *)start, (void *)end, -1, "initrd");
 }
 #endif

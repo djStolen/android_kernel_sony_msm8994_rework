@@ -270,6 +270,9 @@ out_rcu_unlock:
 	goto out;
 }
 
+	err = proto_register(&pingv6_prot, 1);
+	if (err)
+		goto out_unregister_ping_proto;
 
 /* bind for INET6 API */
 int inet6_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
@@ -971,6 +974,10 @@ static int __init inet6_init(void)
 	err = ipv6_packet_init();
 	if (err)
 		goto ipv6_packet_fail;
+
+	err = pingv6_init();
+	if (err)
+		goto pingv6_fail;
 
 	err = pingv6_init();
 	if (err)

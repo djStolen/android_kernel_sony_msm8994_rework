@@ -62,6 +62,17 @@ static inline bool try_to_freeze_unsafe(void)
 	return __refrigerator(false);
 }
 
+/*
+ * DO NOT ADD ANY NEW CALLERS OF THIS FUNCTION
+ * If try_to_freeze causes a lockdep warning it means the caller may deadlock
+ */
+static inline bool try_to_freeze_unsafe(void)
+{
+	if (!(current->flags & PF_NOFREEZE))
+		debug_check_no_locks_held();
+	return try_to_freeze_unsafe();
+}
+
 static inline bool try_to_freeze(void)
 {
 	if (!(current->flags & PF_NOFREEZE))
@@ -128,6 +139,14 @@ static inline void freezer_count(void)
 	 */
 	smp_mb();
 	try_to_freeze();
+}
+
+/* DO NOT ADD ANY NEW CALLERS OF THIS FUNCTION */
+static inline void freezer_count_unsafe(void)
+{
+	current->flags &= ~PF_FREEZER_SKIP;
+	smp_mb();
+	try_to_freeze_unsafe();
 }
 
 /* DO NOT ADD ANY NEW CALLERS OF THIS FUNCTION */

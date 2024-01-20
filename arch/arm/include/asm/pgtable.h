@@ -27,6 +27,9 @@
 
 #include <asm/tlbflush.h>
 
+
+#include <asm/tlbflush.h>
+
 #ifdef CONFIG_ARM_LPAE
 #include <asm/pgtable-3level.h>
 #else

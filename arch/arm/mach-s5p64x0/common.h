@@ -14,6 +14,8 @@
 
 #include <linux/reboot.h>
 
+#include <linux/reboot.h>
+
 void s5p6440_init_irq(void);
 void s5p6450_init_irq(void);
 void s5p64x0_init_io(struct map_desc *mach_desc, int size);

@@ -80,8 +80,8 @@ extern unsigned int da850_max_speed;
 #define DA8XX_SHARED_RAM_BASE	0x80000000
 #define DA8XX_ARM_RAM_BASE	0xffff0000
 
-void __init da830_init(void);
-void __init da850_init(void);
+void da830_init(void);
+void da850_init(void);
 
 int da830_register_edma(struct edma_rsv_info *rsv);
 int da850_register_edma(struct edma_rsv_info *rsv[2]);

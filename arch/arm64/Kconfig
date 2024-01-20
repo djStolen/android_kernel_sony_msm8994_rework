@@ -358,6 +358,11 @@ config MACH_SONY_SATSUKI_DSDS
       If you enable this config,
       please use SONY Mobile device tree.
 
+config ARCH_XGENE
+	bool "AppliedMicro X-Gene SOC Family"
+	help
+	  This enables support for AppliedMicro X-Gene SOC Family
+
 endmenu
 
 menu "Bus support"
@@ -785,6 +790,8 @@ source "drivers/Kconfig"
 source "drivers/firmware/Kconfig"
 
 source "fs/Kconfig"
+
+source "arch/arm64/kvm/Kconfig"
 
 source "arch/arm64/kvm/Kconfig"
 

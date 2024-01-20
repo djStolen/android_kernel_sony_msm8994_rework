@@ -746,6 +746,11 @@ struct input_keymap_entry {
 #define KEY_BRIGHTNESS_MIN		0x250	/* Set Brightness to Minimum */
 #define KEY_BRIGHTNESS_MAX		0x251	/* Set Brightness to Maximum */
 
+#define BTN_DPAD_UP		0x220
+#define BTN_DPAD_DOWN		0x221
+#define BTN_DPAD_LEFT		0x222
+#define BTN_DPAD_RIGHT		0x223
+
 #define BTN_TRIGGER_HAPPY		0x2c0
 #define BTN_TRIGGER_HAPPY1		0x2c0
 #define BTN_TRIGGER_HAPPY2		0x2c1

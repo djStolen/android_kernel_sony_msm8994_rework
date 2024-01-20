@@ -582,8 +582,8 @@ static int unlazy_walk(struct nameidata *nd, struct dentry *dentry)
 		 * a reference at this point.
 		 */
 		BUG_ON(!IS_ROOT(dentry) && dentry->d_parent != parent);
-		BUG_ON(!parent->d_count);
-		parent->d_count++;
+		BUG_ON(!parent->d_lockref.count);
+		parent->d_lockref.count++;
 		spin_unlock(&dentry->d_lock);
 	}
 	spin_unlock(&parent->d_lock);
@@ -1398,7 +1398,7 @@ static int lookup_fast(struct nameidata *nd,
 	 */
 	if (nd->flags & LOOKUP_RCU) {
 		unsigned seq;
-		dentry = __d_lookup_rcu(parent, &nd->last, &seq, nd->inode);
+		dentry = __d_lookup_rcu(parent, &nd->last, &seq);
 		if (!dentry)
 			goto unlazy;
 
@@ -1833,8 +1833,7 @@ static int link_path_walk(const char *name, struct nameidata *nd)
 			struct dentry *parent = nd->path.dentry;
 			nd->flags &= ~LOOKUP_JUMPED;
 			if (unlikely(parent->d_flags & DCACHE_OP_HASH)) {
-				err = parent->d_op->d_hash(parent, nd->inode,
-							   &this);
+				err = parent->d_op->d_hash(parent, &this);
 				if (err < 0)
 					break;
 			}
@@ -2169,7 +2168,7 @@ struct dentry *lookup_one_len2(const char *name, struct vfsmount *mnt, struct de
 	 * to use its own hash..
 	 */
 	if (base->d_flags & DCACHE_OP_HASH) {
-		int err = base->d_op->d_hash(base, base->d_inode, &this);
+		int err = base->d_op->d_hash(base, &this);
 		if (err < 0)
 			return ERR_PTR(err);
 	}
@@ -3034,6 +3033,67 @@ out:
 	return error;
 }
 
+static int do_tmpfile(int dfd, struct filename *pathname,
+		struct nameidata *nd, int flags,
+		const struct open_flags *op,
+		struct file *file, int *opened)
+{
+	static const struct qstr name = QSTR_INIT("/", 1);
+	struct dentry *dentry, *child;
+	struct inode *dir;
+	int error = path_lookupat(dfd, pathname->name,
+				  flags | LOOKUP_DIRECTORY, nd);
+	if (unlikely(error))
+		return error;
+	error = mnt_want_write(nd->path.mnt);
+	if (unlikely(error))
+		goto out;
+	/* we want directory to be writable */
+	error = inode_permission(nd->inode, MAY_WRITE | MAY_EXEC);
+	if (error)
+		goto out2;
+	dentry = nd->path.dentry;
+	dir = dentry->d_inode;
+	if (!dir->i_op->tmpfile) {
+		error = -EOPNOTSUPP;
+		goto out2;
+	}
+	child = d_alloc(dentry, &name);
+	if (unlikely(!child)) {
+		error = -ENOMEM;
+		goto out2;
+	}
+	nd->flags &= ~LOOKUP_DIRECTORY;
+	nd->flags |= op->intent;
+	dput(nd->path.dentry);
+	nd->path.dentry = child;
+	error = dir->i_op->tmpfile(dir, nd->path.dentry, op->mode);
+	if (error)
+		goto out2;
+	audit_inode(pathname, nd->path.dentry, 0);
+	error = may_open(&nd->path, op->acc_mode, op->open_flag);
+	if (error)
+		goto out2;
+	file->f_path.mnt = nd->path.mnt;
+	error = finish_open(file, nd->path.dentry, NULL, opened);
+	if (error)
+		goto out2;
+	error = open_check_o_direct(file);
+	if (error) {
+		fput(file);
+	} else if (!(op->open_flag & O_EXCL)) {
+		struct inode *inode = file_inode(file);
+		spin_lock(&inode->i_lock);
+		inode->i_state |= I_LINKABLE;
+		spin_unlock(&inode->i_lock);
+	}
+out2:
+	mnt_drop_write(nd->path.mnt);
+out:
+	path_put(&nd->path);
+	return error;
+}
+
 static struct file *path_openat(int dfd, struct filename *pathname,
 		struct nameidata *nd, const struct open_flags *op, int flags)
 {
@@ -3052,6 +3112,11 @@ static struct file *path_openat(int dfd, struct filename *pathname,
 	if (unlikely(file->f_flags & __O_TMPFILE)) {
 		error = do_tmpfile(dfd, pathname, nd, flags, op, file, &opened);
 		goto out2;
+	}
+
+	if (unlikely(file->f_flags & __O_TMPFILE)) {
+		error = do_tmpfile(dfd, pathname, nd, flags, op, file, &opened);
+		goto out;
 	}
 
 	error = path_init(dfd, pathname->name, flags | LOOKUP_PARENT, nd, &base);
@@ -3421,7 +3486,7 @@ void dentry_unhash(struct dentry *dentry)
 {
 	shrink_dcache_parent(dentry);
 	spin_lock(&dentry->d_lock);
-	if (dentry->d_count == 1)
+	if (dentry->d_lockref.count == 1)
 		__d_drop(dentry);
 	spin_unlock(&dentry->d_lock);
 }

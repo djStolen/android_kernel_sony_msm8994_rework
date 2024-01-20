@@ -94,6 +94,12 @@ static bool page_empty(void *ptr)
 	return page_count(ptr_page) == 1;
 }
 
+static bool page_empty(void *ptr)
+{
+	struct page *ptr_page = virt_to_page(ptr);
+	return page_count(ptr_page) == 1;
+}
+
 static void clear_pud_entry(struct kvm *kvm, pud_t *pud, phys_addr_t addr)
 {
 	if (pud_huge(*pud)) {
@@ -495,9 +501,6 @@ int kvm_alloc_stage2_pgd(struct kvm *kvm)
 	pgd = (pgd_t *)__get_free_pages(GFP_KERNEL, S2_PGD_ORDER);
 	if (!pgd)
 		return -ENOMEM;
-
-	/* stage-2 pgd must be aligned to its size */
-	VM_BUG_ON((unsigned long)pgd & (S2_PGD_SIZE - 1));
 
 	memset(pgd, 0, PTRS_PER_S2_PGD * sizeof(pgd_t));
 	kvm_clean_pgd(pgd);

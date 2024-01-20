@@ -179,6 +179,7 @@ void __init s5pc100_init_clocks(int xtal)
 	s5p_register_clocks(xtal);
 	s5pc100_register_clocks();
 	s5pc100_setup_clocks();
+	samsung_wdt_reset_init(S3C_VA_WATCHDOG);
 }
 
 void __init s5pc100_init_irq(void)

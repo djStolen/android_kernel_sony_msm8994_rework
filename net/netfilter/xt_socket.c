@@ -408,6 +408,28 @@ static int socket_mt_v3_check(const struct xt_mtchk_param *par)
 	return 0;
 }
 
+static int socket_mt_v1_check(const struct xt_mtchk_param *par)
+{
+	const struct xt_socket_mtinfo1 *info = (struct xt_socket_mtinfo1 *) par->matchinfo;
+
+	if (info->flags & ~XT_SOCKET_FLAGS_V1) {
+		pr_info("unknown flags 0x%x\n", info->flags & ~XT_SOCKET_FLAGS_V1);
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static int socket_mt_v2_check(const struct xt_mtchk_param *par)
+{
+	const struct xt_socket_mtinfo2 *info = (struct xt_socket_mtinfo2 *) par->matchinfo;
+
+	if (info->flags & ~XT_SOCKET_FLAGS_V2) {
+		pr_info("unknown flags 0x%x\n", info->flags & ~XT_SOCKET_FLAGS_V2);
+		return -EINVAL;
+	}
+	return 0;
+}
+
 static struct xt_match socket_mt_reg[] __read_mostly = {
 	{
 		.name		= "socket",

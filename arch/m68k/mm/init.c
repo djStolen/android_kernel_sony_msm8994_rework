@@ -110,7 +110,7 @@ void __init paging_init(void)
 void free_initmem(void)
 {
 #ifndef CONFIG_MMU_SUN3
-	free_initmem_default(0);
+	free_initmem_default(-1);
 #endif /* CONFIG_MMU_SUN3 */
 }
 
@@ -189,19 +189,20 @@ void __init mem_init(void)
 	if (zero_pgtable)
 		init_pointer_table((unsigned long)zero_pgtable);
 #endif
+}
 
-	pr_info("Memory: %luk/%luk available (%dk kernel code, %dk data, %dk init)\n",
-	       nr_free_pages() << (PAGE_SHIFT-10),
-	       totalram_pages << (PAGE_SHIFT-10),
-	       codepages << (PAGE_SHIFT-10),
-	       datapages << (PAGE_SHIFT-10),
-	       initpages << (PAGE_SHIFT-10));
+void __init mem_init(void)
+{
+	/* this will put all memory onto the freelists */
+	free_all_bootmem();
+	init_pointer_tables();
+	mem_init_print_info(NULL);
 	print_memmap();
 }
 
 #ifdef CONFIG_BLK_DEV_INITRD
 void free_initrd_mem(unsigned long start, unsigned long end)
 {
-	free_reserved_area(start, end, 0, "initrd");
+	free_reserved_area((void *)start, (void *)end, -1, "initrd");
 }
 #endif

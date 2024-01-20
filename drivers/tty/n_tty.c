@@ -89,6 +89,7 @@ struct n_tty_data {
 	int read_head;
 	int read_tail;
 	int read_cnt;
+	int minimum_to_wake;
 
 	unsigned char *echo_buf;
 	unsigned int echo_pos;
@@ -154,8 +155,15 @@ static void n_tty_set_room(struct tty_struct *tty)
 
 	raw_spin_unlock_irqrestore(&ldata->read_lock, flags);
 
+	raw_spin_unlock_irqrestore(&ldata->read_lock, flags);
+
+	return left && !old_left;
+}
+
+static void n_tty_set_room(struct tty_struct *tty)
+{
 	/* Did this open up the receive buffer? We may need to flip */
-	if (left && !old_left) {
+	if (set_room(tty)) {
 		WARN_RATELIMIT(tty->port->itty == NULL,
 				"scheduling with invalid itty\n");
 		/* see if ldisc has been killed - if so, this means that
@@ -652,8 +660,7 @@ static void process_echoes(struct tty_struct *tty)
 			if (no_space_left)
 				break;
 		} else {
-			if (O_OPOST(tty) &&
-			    !(test_bit(TTY_HW_COOK_OUT, &tty->flags))) {
+			if (O_OPOST(tty)) {
 				int retval = do_output_char(c, tty, space);
 				if (retval < 0)
 					break;
@@ -1459,9 +1466,9 @@ static void n_tty_receive_buf(struct tty_struct *tty, const unsigned char *cp,
 			tty->ops->flush_chars(tty);
 	}
 
-	n_tty_set_room(tty);
+	set_room(tty);
 
-	if ((!ldata->icanon && (ldata->read_cnt >= tty->minimum_to_wake)) ||
+	if ((!ldata->icanon && (ldata->read_cnt >= ldata->minimum_to_wake)) ||
 		L_EXTPROC(tty)) {
 		kill_fasync(&tty->fasync, SIGIO, POLL_IN);
 		if (waitqueue_active(&tty->read_wait))
@@ -1521,12 +1528,7 @@ static void n_tty_set_termios(struct tty_struct *tty, struct ktermios *old)
 		wake_up_interruptible(&tty->read_wait);
 
 	ldata->icanon = (L_ICANON(tty) != 0);
-	if (test_bit(TTY_HW_COOK_IN, &tty->flags)) {
-		ldata->raw = 1;
-		ldata->real_raw = 1;
-		n_tty_set_room(tty);
-		return;
-	}
+
 	if (I_ISTRIP(tty) || I_IUCLC(tty) || I_IGNCR(tty) ||
 	    I_ICRNL(tty) || I_INLCR(tty) || L_ICANON(tty) ||
 	    I_IXON(tty) || L_ISIG(tty) || L_ECHO(tty) ||
@@ -1647,7 +1649,7 @@ static int n_tty_open(struct tty_struct *tty)
 	tty->disc_data = ldata;
 	reset_buffer_flags(tty->disc_data);
 	ldata->column = 0;
-	tty->minimum_to_wake = 1;
+	ldata->minimum_to_wake = 1;
 	tty->closing = 0;
 	/* indicate buffer work may resume */
 	clear_bit(TTY_LDISC_HALTED, &tty->flags);
@@ -1811,21 +1813,17 @@ do_it_again:
 	minimum = time = 0;
 	timeout = MAX_SCHEDULE_TIMEOUT;
 	if (!ldata->icanon) {
-		time = (HZ / 10) * TIME_CHAR(tty);
 		minimum = MIN_CHAR(tty);
 		if (minimum) {
+			time = (HZ / 10) * TIME_CHAR(tty);
 			if (time)
-				tty->minimum_to_wake = 1;
+				ldata->minimum_to_wake = 1;
 			else if (!waitqueue_active(&tty->read_wait) ||
-				 (tty->minimum_to_wake > minimum))
-				tty->minimum_to_wake = minimum;
+				 (ldata->minimum_to_wake > minimum))
+				ldata->minimum_to_wake = minimum;
 		} else {
-			timeout = 0;
-			if (time) {
-				timeout = time;
-				time = 0;
-			}
-			tty->minimum_to_wake = minimum = 1;
+			timeout = (HZ / 10) * TIME_CHAR(tty);
+			ldata->minimum_to_wake = minimum = 1;
 		}
 	}
 
@@ -1865,9 +1863,9 @@ do_it_again:
 		   TASK_RUNNING. */
 		set_current_state(TASK_INTERRUPTIBLE);
 
-		if (((minimum - (b - buf)) < tty->minimum_to_wake) &&
+		if (((minimum - (b - buf)) < ldata->minimum_to_wake) &&
 		    ((minimum - (b - buf)) >= 1))
-			tty->minimum_to_wake = (minimum - (b - buf));
+			ldata->minimum_to_wake = (minimum - (b - buf));
 
 		if (!input_available_p(tty, 0)) {
 			if (test_bit(TTY_OTHER_CLOSED, &tty->flags)) {
@@ -1983,7 +1981,7 @@ do_it_again:
 	remove_wait_queue(&tty->read_wait, &wait);
 
 	if (!waitqueue_active(&tty->read_wait))
-		tty->minimum_to_wake = minimum;
+		ldata->minimum_to_wake = minimum;
 
 	__set_current_state(TASK_RUNNING);
 	size = b - buf;
@@ -2049,7 +2047,7 @@ static ssize_t n_tty_write(struct tty_struct *tty, struct file *file,
 			retval = -EIO;
 			break;
 		}
-		if (O_OPOST(tty) && !(test_bit(TTY_HW_COOK_OUT, &tty->flags))) {
+		if (O_OPOST(tty)) {
 			while (nr > 0) {
 				ssize_t num = process_output_block(tty, b, nr);
 				if (num < 0) {
@@ -2115,6 +2113,7 @@ break_out:
 static unsigned int n_tty_poll(struct tty_struct *tty, struct file *file,
 							poll_table *wait)
 {
+	struct n_tty_data *ldata = tty->disc_data;
 	unsigned int mask = 0;
 
 	poll_wait(file, &tty->read_wait, wait);
@@ -2129,9 +2128,9 @@ static unsigned int n_tty_poll(struct tty_struct *tty, struct file *file,
 		mask |= POLLHUP;
 	if (!(mask & (POLLHUP | POLLIN | POLLRDNORM))) {
 		if (MIN_CHAR(tty) && !TIME_CHAR(tty))
-			tty->minimum_to_wake = MIN_CHAR(tty);
+			ldata->minimum_to_wake = MIN_CHAR(tty);
 		else
-			tty->minimum_to_wake = 1;
+			ldata->minimum_to_wake = 1;
 	}
 	if (tty->ops->write && !tty_is_writelocked(tty) &&
 			tty_chars_in_buffer(tty) < WAKEUP_CHARS &&
@@ -2179,6 +2178,18 @@ static int n_tty_ioctl(struct tty_struct *tty, struct file *file,
 	}
 }
 
+static void n_tty_fasync(struct tty_struct *tty, int on)
+{
+	struct n_tty_data *ldata = tty->disc_data;
+
+	if (!waitqueue_active(&tty->read_wait)) {
+		if (on)
+			ldata->minimum_to_wake = 1;
+		else if (!tty->fasync)
+			ldata->minimum_to_wake = N_TTY_BUF_SIZE;
+	}
+}
+
 struct tty_ldisc_ops tty_ldisc_N_TTY = {
 	.magic           = TTY_LDISC_MAGIC,
 	.name            = "n_tty",
@@ -2192,7 +2203,8 @@ struct tty_ldisc_ops tty_ldisc_N_TTY = {
 	.set_termios     = n_tty_set_termios,
 	.poll            = n_tty_poll,
 	.receive_buf     = n_tty_receive_buf,
-	.write_wakeup    = n_tty_write_wakeup
+	.write_wakeup    = n_tty_write_wakeup,
+	.fasync		 = n_tty_fasync,
 };
 
 /**

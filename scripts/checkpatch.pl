@@ -1584,6 +1584,29 @@ sub cleanup_continuation_headers {
 	} while ($again);
 }
 
+sub trim {
+	my ($string) = @_;
+
+	$string =~ s/(^\s+|\s+$)//g;
+
+	return $string;
+}
+
+sub tabify {
+	my ($leading) = @_;
+
+	my $source_indent = 8;
+	my $max_spaces_before_tab = $source_indent - 1;
+	my $spaces_to_tab = " " x $source_indent;
+
+	#convert leading spaces to tabs
+	1 while $leading =~ s@^([\t]*)$spaces_to_tab@$1\t@g;
+	#Remove spaces before a tab
+	1 while $leading =~ s@^([\t]*)( {1,$max_spaces_before_tab})\t@$1\t@g;
+
+	return "$leading";
+}
+
 sub pos_last_openparen {
 	my ($line) = @_;
 
@@ -1683,6 +1706,8 @@ sub process {
 	foreach my $rawline (@rawlines) {
 		$linenr++;
 		$line = $rawline;
+
+		push(@fixed, $rawline) if ($fix);
 
 		push(@fixed, $rawline) if ($fix);
 
@@ -4195,6 +4220,18 @@ sub process {
 			     "use of mdelay() found: msleep() is the preferred API.\n" . $herecurr );
 		}
 
+# check for comparisons of jiffies
+		if ($line =~ /\bjiffies\s*$Compare|$Compare\s*jiffies\b/) {
+			WARN("JIFFIES_COMPARISON",
+			     "Comparing jiffies is almost always wrong; prefer time_after, time_before and friends\n" . $herecurr);
+		}
+
+# check for comparisons of get_jiffies_64()
+		if ($line =~ /\bget_jiffies_64\s*\(\s*\)\s*$Compare|$Compare\s*get_jiffies_64\s*\(\s*\)/) {
+			WARN("JIFFIES_COMPARISON",
+			     "Comparing get_jiffies_64() is almost always wrong; prefer time_after64, time_before64 and friends\n" . $herecurr);
+		}
+
 # warn about #ifdefs in C files
 #		if ($line =~ /^.\s*\#\s*if(|n)def/ && ($realfile =~ /\.c$/)) {
 #			print "#ifdef in C files should be avoided\n";
@@ -4483,6 +4520,14 @@ sub process {
 			    "Prefer $3(sizeof(*$1)...) over $3($4...)\n" . $herecurr);
 		}
 
+# alloc style
+# p = alloc(sizeof(struct foo), ...) should be p = alloc(sizeof(*p), ...)
+		if ($^V && $^V ge 5.10.0 &&
+		    $line =~ /\b($Lval)\s*\=\s*(?:$balanced_parens)?\s*([kv][mz]alloc(?:_node)?)\s*\(\s*(sizeof\s*\(\s*struct\s+$Lval\s*\))/) {
+			CHK("ALLOC_SIZEOF_STRUCT",
+			    "Prefer $3(sizeof(*$1)...) over $3($4...)\n" . $herecurr);
+		}
+
 # check for krealloc arg reuse
 		if ($^V && $^V ge 5.10.0 &&
 		    $line =~ /\b($Lval)\s*\=\s*(?:$balanced_parens)?\s*krealloc\s*\(\s*\1\s*,/) {
@@ -4569,6 +4614,33 @@ sub process {
 		if ($line =~ /\byield\s*\(\s*\)/) {
 			WARN("YIELD",
 			     "Using yield() is generally wrong. See yield() kernel-doc (sched/core.c)\n"  . $herecurr);
+		}
+
+# check for comparisons against true and false
+		if ($line =~ /\+\s*(.*?)\b(true|false|$Lval)\s*(==|\!=)\s*(true|false|$Lval)\b(.*)$/i) {
+			my $lead = $1;
+			my $arg = $2;
+			my $test = $3;
+			my $otype = $4;
+			my $trail = $5;
+			my $op = "!";
+
+			($arg, $otype) = ($otype, $arg) if ($arg =~ /^(?:true|false)$/i);
+
+			my $type = lc($otype);
+			if ($type =~ /^(?:true|false)$/) {
+				if (("$test" eq "==" && "$type" eq "true") ||
+				    ("$test" eq "!=" && "$type" eq "false")) {
+					$op = "";
+				}
+
+				CHK("BOOL_COMPARISON",
+				    "Using comparison to $otype is error prone\n" . $herecurr);
+
+## maybe suggesting a correct construct would better
+##				    "Using comparison to $otype is error prone.  Perhaps use '${lead}${op}${arg}${trail}'\n" . $herecurr);
+
+			}
 		}
 
 # check for comparisons against true and false
@@ -4779,6 +4851,40 @@ sub process {
 	if ($clean == 0 && $fix && "@rawlines" ne "@fixed") {
 		my $newfile = $filename;
 		$newfile .= ".EXPERIMENTAL-checkpatch-fixes" if (!$fix_inplace);
+		my $linecount = 0;
+		my $f;
+
+		open($f, '>', $newfile)
+		    or die "$P: Can't open $newfile for write\n";
+		foreach my $fixed_line (@fixed) {
+			$linecount++;
+			if ($file) {
+				if ($linecount > 3) {
+					$fixed_line =~ s/^\+//;
+					print $f $fixed_line. "\n";
+				}
+			} else {
+				print $f $fixed_line . "\n";
+			}
+		}
+		close($f);
+
+		if (!$quiet) {
+			print << "EOM";
+Wrote EXPERIMENTAL --fix correction(s) to '$newfile'
+
+Do _NOT_ trust the results written to this file.
+Do _NOT_ submit these changes without inspecting them for correctness.
+
+This EXPERIMENTAL file is simply a convenience to help rewrite patches.
+No warranties, expressed or implied...
+
+EOM
+		}
+	}
+
+	if ($clean == 0 && $fix && "@rawlines" ne "@fixed") {
+		my $newfile = $filename . ".EXPERIMENTAL-checkpatch-fixes";
 		my $linecount = 0;
 		my $f;
 

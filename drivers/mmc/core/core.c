@@ -1552,6 +1552,29 @@ void mmc_release_host(struct mmc_host *host)
 EXPORT_SYMBOL(mmc_release_host);
 
 /*
+ * This is a helper function, which fetches a runtime pm reference for the
+ * card device and also claims the host.
+ */
+void mmc_get_card(struct mmc_card *card)
+{
+	pm_runtime_get_sync(&card->dev);
+	mmc_claim_host(card->host);
+}
+EXPORT_SYMBOL(mmc_get_card);
+
+/*
+ * This is a helper function, which releases the host and drops the runtime
+ * pm reference for the card device.
+ */
+void mmc_put_card(struct mmc_card *card)
+{
+	mmc_release_host(card->host);
+	pm_runtime_mark_last_busy(&card->dev);
+	pm_runtime_put_autosuspend(&card->dev);
+}
+EXPORT_SYMBOL(mmc_put_card);
+
+/*
  * Internal function that does the actual ios call to the host driver,
  * optionally printing some debug output.
  */
@@ -3422,14 +3445,13 @@ int mmc_detect_card_removed(struct mmc_host *host)
 	 * The card will be considered unchanged unless we have been asked to
 	 * detect a change or host requires polling to provide card detection.
 	 */
-	if (!host->detect_change && !(host->caps & MMC_CAP_NEEDS_POLL) &&
-	    !(host->caps2 & MMC_CAP2_DETECT_ON_ERR))
+	if (!host->detect_change && !(host->caps & MMC_CAP_NEEDS_POLL))
 		return ret;
 
 	host->detect_change = 0;
 	if (!ret) {
 		ret = _mmc_detect_card_removed(host);
-		if (ret && (host->caps2 & MMC_CAP2_DETECT_ON_ERR)) {
+		if (ret && (host->caps & MMC_CAP_NEEDS_POLL)) {
 			/*
 			 * Schedule a detect work as soon as possible to let a
 			 * rescan handle the card removal.
@@ -3557,9 +3579,7 @@ void mmc_stop_host(struct mmc_host *host)
 	mmc_bus_get(host);
 	if (host->bus_ops && !host->bus_dead) {
 		/* Calling bus_ops->remove() with a claimed host can deadlock */
-		if (host->bus_ops->remove)
-			host->bus_ops->remove(host);
-
+		host->bus_ops->remove(host);
 		mmc_claim_host(host);
 		mmc_detach_bus(host);
 		mmc_power_off(host);
@@ -3623,52 +3643,6 @@ int mmc_power_restore_host(struct mmc_host *host)
 	return ret;
 }
 EXPORT_SYMBOL(mmc_power_restore_host);
-
-int mmc_card_awake(struct mmc_host *host)
-{
-	int err = -ENOSYS;
-
-	if (host->caps2 & MMC_CAP2_NO_SLEEP_CMD)
-		return 0;
-
-	mmc_bus_get(host);
-
-	if (host->bus_ops && !host->bus_dead && host->bus_ops->awake)
-		err = host->bus_ops->awake(host);
-
-	mmc_bus_put(host);
-
-	return err;
-}
-EXPORT_SYMBOL(mmc_card_awake);
-
-int mmc_card_sleep(struct mmc_host *host)
-{
-	int err = -ENOSYS;
-
-	if (host->caps2 & MMC_CAP2_NO_SLEEP_CMD)
-		return 0;
-
-	mmc_bus_get(host);
-
-	if (host->bus_ops && !host->bus_dead && host->bus_ops->sleep)
-		err = host->bus_ops->sleep(host);
-
-	mmc_bus_put(host);
-
-	return err;
-}
-EXPORT_SYMBOL(mmc_card_sleep);
-
-int mmc_card_can_sleep(struct mmc_host *host)
-{
-	struct mmc_card *card = host->card;
-
-	if (card && mmc_card_mmc(card) && card->ext_csd.rev >= 3)
-		return 1;
-	return 0;
-}
-EXPORT_SYMBOL(mmc_card_can_sleep);
 
 /*
  * Flush the cache to the non-volatile storage.

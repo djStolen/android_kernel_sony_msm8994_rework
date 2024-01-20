@@ -223,7 +223,7 @@ static struct pxafb_mach_info mioa701_pxafb_info = {
 /*
  * Keyboard configuration
  */
-static unsigned int mioa701_matrix_keys[] = {
+static const unsigned int mioa701_matrix_keys[] = {
 	KEY(0, 0, KEY_UP),
 	KEY(0, 1, KEY_RIGHT),
 	KEY(0, 2, KEY_MEDIA),
@@ -234,11 +234,16 @@ static unsigned int mioa701_matrix_keys[] = {
 	KEY(2, 1, KEY_PHONE),	/* Phone Green key */
 	KEY(2, 2, KEY_CAMERA)	/* Camera key */
 };
+
+static struct matrix_keymap_data mioa701_matrix_keymap_data = {
+	.keymap			= mioa701_matrix_keys,
+	.keymap_size		= ARRAY_SIZE(mioa701_matrix_keys),
+};
+
 static struct pxa27x_keypad_platform_data mioa701_keypad_info = {
 	.matrix_key_rows = 3,
 	.matrix_key_cols = 3,
-	.matrix_key_map = mioa701_matrix_keys,
-	.matrix_key_map_size = ARRAY_SIZE(mioa701_matrix_keys),
+	.matrix_keymap_data = &mioa701_matrix_keymap_data,
 };
 
 /*
@@ -757,7 +762,6 @@ static void mioa701_machine_exit(void)
 
 MACHINE_START(MIOA701, "MIO A701")
 	.atag_offset	= 0x100,
-	.restart_mode	= 's',
 	.map_io		= &pxa27x_map_io,
 	.nr_irqs	= PXA_NR_IRQS,
 	.init_irq	= &pxa27x_init_irq,

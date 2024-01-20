@@ -193,12 +193,17 @@ static int __do_page_fault(struct mm_struct *mm, unsigned long addr,
 	 * it.
 	 */
 good_area:
-	if (access_error(esr, vma)) {
+	/*
+	 * Check that the permissions on the VMA allow for the fault which
+	 * occurred. If we encountered a write or exec fault, we must have
+	 * appropriate permissions, otherwise we allow any permission.
+	 */
+	if (!(vma->vm_flags & vm_flags)) {
 		fault = VM_FAULT_BADACCESS;
 		goto out;
 	}
 
-	return handle_mm_fault(mm, vma, addr & PAGE_MASK, flags);
+	return handle_mm_fault(mm, vma, addr & PAGE_MASK, mm_flags);
 
 check_stack:
 	if (vma->vm_flags & VM_GROWSDOWN && !expand_stack(vma, addr))
@@ -254,7 +259,7 @@ retry:
 #endif
 	}
 
-	fault = __do_page_fault(mm, addr, esr, flags, tsk);
+	fault = __do_page_fault(mm, addr, mm_flags, vm_flags, tsk);
 
 	/*
 	 * If we need to retry but a fatal signal is pending, handle the
@@ -271,7 +276,7 @@ retry:
 	 */
 
 	perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS, 1, regs, addr);
-	if (flags & FAULT_FLAG_ALLOW_RETRY) {
+	if (mm_flags & FAULT_FLAG_ALLOW_RETRY) {
 		if (fault & VM_FAULT_MAJOR) {
 			tsk->maj_flt++;
 			perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS_MAJ, 1, regs,
@@ -286,7 +291,7 @@ retry:
 			 * Clear FAULT_FLAG_ALLOW_RETRY to avoid any risk of
 			 * starvation.
 			 */
-			flags &= ~FAULT_FLAG_ALLOW_RETRY;
+			mm_flags &= ~FAULT_FLAG_ALLOW_RETRY;
 			goto retry;
 		}
 	}
