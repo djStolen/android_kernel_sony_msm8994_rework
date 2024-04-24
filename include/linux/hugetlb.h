@@ -405,6 +405,11 @@ static inline unsigned int pages_per_huge_page(struct hstate *h)
 #define pmd_huge_support()	0
 #define hugepage_migration_support(h)	0
 
+static inline pgoff_t basepage_index(struct page *page)
+{
+	return page->index;
+}
+
 #endif	/* CONFIG_HUGETLB_PAGE */
 
 #endif /* _LINUX_HUGETLB_H */

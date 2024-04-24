@@ -15,7 +15,7 @@ static inline void sched_clock_postinit(void) { }
 #endif
 
 extern void setup_sched_clock(u32 (*read)(void), int bits, unsigned long rate);
-extern void sched_clock_register(u64 (*read)(void), int bits,
+extern void sched_clock_register(u64 (*read)(void), int bits,						// TODO: djStolen; possible cherrypick from newer Linux Kerne than 3.10
 				 unsigned long rate);
 
 extern unsigned long long (*sched_clock_func)(void);

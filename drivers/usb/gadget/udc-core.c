@@ -110,6 +110,8 @@ void usb_gadget_unmap_request(struct usb_gadget *gadget,
 }
 EXPORT_SYMBOL_GPL(usb_gadget_unmap_request);
 
+#endif	/* CONFIG_HAS_DMA */
+
 /* ------------------------------------------------------------------------- */
 
 static void usb_gadget_state_work(struct work_struct *work)
@@ -123,7 +125,8 @@ void usb_gadget_set_state(struct usb_gadget *gadget,
 		enum usb_device_state state)
 {
 	gadget->state = state;
-	schedule_work(&gadget->work);
+	//schedule_work(&gadget->work);		//TODO: djStolen; most probably cherrypick from Linux Version higher than 3.11; see the function before
+	sysfs_notify(&gadget->dev.kobj, NULL, "state");
 }
 EXPORT_SYMBOL_GPL(usb_gadget_set_state);
 

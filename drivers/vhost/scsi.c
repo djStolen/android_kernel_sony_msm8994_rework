@@ -1196,32 +1196,32 @@ vhost_scsi_set_endpoint(struct vhost_scsi *vs,
 	if (vs->vs_tpg)
 		memcpy(vs_tpg, vs->vs_tpg, len);
 
-	list_for_each_entry(tv_tpg, &tcm_vhost_list, tv_tpg_list) {
-		mutex_lock(&tv_tpg->tv_tpg_mutex);
-		if (!tv_tpg->tpg_nexus) {
-			mutex_unlock(&tv_tpg->tv_tpg_mutex);
+	list_for_each_entry(tpg, &tcm_vhost_list, tv_tpg_list) {
+		mutex_lock(&tpg->tv_tpg_mutex);
+		if (!tpg->tpg_nexus) {
+			mutex_unlock(&tpg->tv_tpg_mutex);
 			continue;
 		}
-		if (tv_tpg->tv_tpg_vhost_count != 0) {
-			mutex_unlock(&tv_tpg->tv_tpg_mutex);
+		if (tpg->tv_tpg_vhost_count != 0) {
+			mutex_unlock(&tpg->tv_tpg_mutex);
 			continue;
 		}
-		tv_tport = tv_tpg->tport;
+		tv_tport = tpg->tport;
 
 		if (!strcmp(tv_tport->tport_name, t->vhost_wwpn)) {
-			if (vs->vs_tpg && vs->vs_tpg[tv_tpg->tport_tpgt]) {
+			if (vs->vs_tpg && vs->vs_tpg[tpg->tport_tpgt]) {
 				kfree(vs_tpg);
-				mutex_unlock(&tv_tpg->tv_tpg_mutex);
+				mutex_unlock(&tpg->tv_tpg_mutex);
 				ret = -EEXIST;
 				goto out;
 			}
-			tv_tpg->tv_tpg_vhost_count++;
-			tv_tpg->vhost_scsi = vs;
-			vs_tpg[tv_tpg->tport_tpgt] = tv_tpg;
+			tpg->tv_tpg_vhost_count++;
+			tpg->vhost_scsi = vs;
+			vs_tpg[tpg->tport_tpgt] = tpg;
 			smp_mb__after_atomic();
 			match = true;
 		}
-		mutex_unlock(&tv_tpg->tv_tpg_mutex);
+		mutex_unlock(&tpg->tv_tpg_mutex);
 	}
 
 	if (match) {

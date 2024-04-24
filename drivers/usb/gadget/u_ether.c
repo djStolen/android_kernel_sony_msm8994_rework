@@ -126,6 +126,7 @@ struct eth_dev {
 
 	bool			zlp;
 	u8			host_mac[ETH_ALEN];
+	u8			dev_mac[ETH_ALEN];
 
 	/* stats */
 	unsigned long		tx_throttle;
@@ -161,10 +162,6 @@ static void uether_debugfs_exit(struct eth_dev *dev);
 
 #define DEFAULT_QLEN	2	/* double buffering by default */
 
-static unsigned qmult = 20;
-module_param(qmult, uint, S_IRUGO|S_IWUSR);
-MODULE_PARM_DESC(qmult, "queue length multiplier at high/super speed");
-
 /*
  * Usually downlink rates are higher than uplink rates and it
  * deserve higher number of requests. For CAT-6 data rates of
@@ -178,7 +175,7 @@ module_param(tx_qmult, uint, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(tx_qmult, "Additional queue length multiplier for tx");
 
 /* for dual-speed hardware, use deeper queues at high/super speed */
-static inline int qlen(struct usb_gadget *gadget)
+static inline int qlen(struct usb_gadget *gadget, unsigned qmult)
 {
 	if (gadget_is_dualspeed(gadget) && (gadget->speed == USB_SPEED_HIGH ||
 					    gadget->speed == USB_SPEED_SUPER))
@@ -1193,7 +1190,7 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 	if (gadget_is_dualspeed(dev->gadget))
 		req->no_interrupt = (dev->gadget->speed == USB_SPEED_HIGH ||
 				     dev->gadget->speed == USB_SPEED_SUPER)
-			? ((dev->tx_qlen % qmult) != 0)
+			? ((atomic_read(&dev->tx_qlen) % dev->qmult) != 0)
 			: 0;
 
 	retval = usb_ep_queue(in, req, GFP_ATOMIC);
@@ -1983,12 +1980,13 @@ struct net_device *gether_connect(struct gether *link)
 	dev->rx_trigger_enabled = link->rx_trigger_enabled;
 
 	if (result == 0)
-		result = alloc_requests(dev, link, qlen(dev->gadget));
+		result = alloc_requests(dev, link, qlen(dev->gadget,
+					dev->qmult));
 
 	if (result == 0) {
 
 		dev->zlp = link->is_zlp_ok;
-		DBG(dev, "qlen %d\n", qlen(dev->gadget));
+		DBG(dev, "qlen %d\n", qlen(dev->gadget, dev->qmult));
 
 		spin_lock(&dev->lock);
 		dev->tx_skb_hold_count = 0;
@@ -2134,6 +2132,7 @@ void gether_disconnect(struct gether *link)
 	dev->port_usb = NULL;
 	spin_unlock(&dev->lock);
 }
+EXPORT_SYMBOL(gether_disconnect);
 
 int gether_up(struct gether *link)
 {

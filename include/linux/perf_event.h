@@ -198,13 +198,14 @@ struct pmu {
 
 	struct device			*dev;
 	const struct attribute_group	**attr_groups;
-	char				*name;
+	const char			*name;
 	int				type;
 
 	int * __percpu			pmu_disable_count;
 	struct perf_cpu_context * __percpu pmu_cpu_context;
 	int				task_ctx_nr;
-	u32                             events_across_hotplug:1,
+	int				hrtimer_interval_ms;
+	u32                             events_across_hotplug:1,		// TODO: djStolen; possible cherrypick from newer Linux Kernel than 3.10
 					reserved:31;
 
 	/*

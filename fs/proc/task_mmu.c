@@ -850,9 +850,10 @@ static int clear_refs_pte_range(pmd_t *pmd, unsigned long addr,
 	return 0;
 }
 
+/* TODO: djStolen: to be removed if compiles !!!
 #define CLEAR_REFS_ALL 1
 #define CLEAR_REFS_ANON 2
-#define CLEAR_REFS_MAPPED 3
+#define CLEAR_REFS_MAPPED 3*/
 #define CLEAR_REFS_MM_HIWATER_RSS 5
 
 static ssize_t clear_refs_write(struct file *file, const char __user *buf,
@@ -871,22 +872,35 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 		count = sizeof(buffer) - 1;
 	if (copy_from_user(buffer, buf, count))
 		return -EFAULT;
-	rv = kstrtoint(strstrip(buffer), 10, &type);
+	rv = kstrtoint(strstrip(buffer), 10, &itype);
 	if (rv < 0)
 		return rv;
-	if ((type < CLEAR_REFS_ALL || type > CLEAR_REFS_MAPPED) &&
+	type = (enum clear_refs_types)itype;
+	if ((type < CLEAR_REFS_ALL || type >= CLEAR_REFS_LAST) &&
 	    type != CLEAR_REFS_MM_HIWATER_RSS)
 		return -EINVAL;
+
+	if (type == CLEAR_REFS_SOFT_DIRTY) {
+		soft_dirty_cleared = true;
+		pr_warn_once("The pagemap bits 55-60 has changed their meaning! "
+				"See the linux/Documentation/vm/pagemap.txt for details.\n");
+	}
+
 	task = get_proc_task(file_inode(file));
 	if (!task)
 		return -ESRCH;
 	mm = get_task_mm(task);
 	if (mm) {
+		struct clear_refs_private cp = {
+			.type = type,
+		};
 		struct mm_walk clear_refs_walk = {
 			.pmd_entry = clear_refs_pte_range,
 			.mm = mm,
+			.private = &cp,
 		};
 
+		/* TODO: djStolen; this if() not in base Linux 3.11 */
 		if (type == CLEAR_REFS_MM_HIWATER_RSS) {
 			/*
 			 * Writing 5 to /proc/pid/clear_refs resets the peak
@@ -899,8 +913,10 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 		}
 
 		down_read(&mm->mmap_sem);
+		if (type == CLEAR_REFS_SOFT_DIRTY)
+			mmu_notifier_invalidate_range_start(mm, 0, -1);
 		for (vma = mm->mmap; vma; vma = vma->vm_next) {
-			clear_refs_walk.private = vma;
+			cp.vma = vma;
 			if (is_vm_hugetlb_page(vma))
 				continue;
 			/*
@@ -1102,7 +1118,7 @@ static int pagemap_pte_range(pmd_t *pmd, unsigned long addr, unsigned long end,
 		 * and that it isn't a huge page vma */
 		if (vma && (vma->vm_start <= addr) &&
 		    !is_vm_hugetlb_page(vma)) {
-			pte_to_pagemap_entry(&pme, vma, addr, *pte);
+			pte_to_pagemap_entry(&pme, pm, vma, addr, *pte);
 		}
 		err = add_to_pagemap(addr, &pme, pm);
 		if (err)

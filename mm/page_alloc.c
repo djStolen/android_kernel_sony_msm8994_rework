@@ -72,6 +72,9 @@
 #include <asm/div64.h>
 #include "internal.h"
 
+/* prevent >1 _updater_ of zone percpu pageset ->high and ->batch fields */
+static DEFINE_MUTEX(pcp_batch_high_lock);
+
 #ifdef CONFIG_USE_PERCPU_NUMA_NODE_ID
 DEFINE_PER_CPU(int, numa_node);
 EXPORT_PER_CPU_SYMBOL(numa_node);
@@ -221,6 +224,7 @@ static char * const zone_names[MAX_NR_ZONES] = {
  * tuned according to the amount of memory in the system.
  */
 int min_free_kbytes = 1024;
+int user_min_free_kbytes;
 int min_free_order_shift = 1;
 
 /*
@@ -771,14 +775,7 @@ static void __free_pages_ok(struct page *page, unsigned int order)
 	local_irq_restore(flags);
 }
 
-/*
- * Read access to zone->managed_pages is safe because it's unsigned long,
- * but we still need to serialize writers. Currently all callers of
- * __free_pages_bootmem() except put_page_bootmem() should only be used
- * at boot time. So for shorter boot time, we shift the burden to
- * put_page_bootmem() to serialize writers.
- */
-void __free_pages_bootmem(struct page *page, unsigned int order)
+void __init __free_pages_bootmem(struct page *page, unsigned int order)
 {
 	unsigned int nr_pages = 1 << order;
 	unsigned int loop;
@@ -5451,28 +5448,34 @@ void adjust_managed_page_count(struct page *page, long count)
 	spin_lock(&managed_page_count_lock);
 	page_zone(page)->managed_pages += count;
 	totalram_pages += count;
+#ifdef CONFIG_HIGHMEM
+	if (PageHighMem(page))
+		totalhigh_pages += count;
+#endif
 	spin_unlock(&managed_page_count_lock);
 }
+EXPORT_SYMBOL(adjust_managed_page_count);
 
-unsigned long free_reserved_area(unsigned long start, unsigned long end,
-				 int poison, char *s)
+unsigned long free_reserved_area(void *start, void *end, int poison, char *s)
 {
-	unsigned long pages, pos;
+	void *pos;
+	unsigned long pages = 0;
 
-	pos = start = PAGE_ALIGN(start);
-	end &= PAGE_MASK;
-	for (pages = 0; pos < end; pos += PAGE_SIZE, pages++) {
-		if (poison)
-			memset((void *)pos, poison, PAGE_SIZE);
-		free_reserved_page(virt_to_page((void *)pos));
-	}
-
-	if (pages && s)
-		pr_info("Freeing %s memory: %ldK (%lx - %lx)\n",
-			s, pages << (PAGE_SHIFT - 10), start, end);
-
-	return pages;
-}
+	start = (void *)PAGE_ALIGN((unsigned long)start);
+	end = (void *)((unsigned long)end & PAGE_MASK);
+	for (pos = start; pos < end; pos += PAGE_SIZE, pages++) {
+		if ((unsigned int)poison <= 0xFF)
+			memset(pos, poison, PAGE_SIZE);
+		free_reserved_page(virt_to_page(pos));
+ 	}
+ 
+ 	if (pages && s)
+		pr_info("Freeing %s memory: %ldK (%p - %p)\n",
+ 			s, pages << (PAGE_SHIFT - 10), start, end);
+ 
+ 	return pages;
+ }
+EXPORT_SYMBOL(free_reserved_area);
 
 #ifdef	CONFIG_HIGHMEM
 void free_highmem_page(struct page *page)
@@ -6515,8 +6518,10 @@ __offline_isolated_pages(unsigned long start_pfn, unsigned long end_pfn)
 		list_del(&page->lru);
 		rmv_page_order(page);
 		zone->free_area[order].nr_free--;
-		if (is_migrate_cma(get_pageblock_migratetype(page)))
-			zone->free_area[order].nr_free_cma--;
+#ifdef CONFIG_HIGHMEM
+		if (PageHighMem(page))
+			totalhigh_pages -= 1 << order;
+#endif
 		for (i = 0; i < (1 << order); i++)
 			SetPageReserved((page+i));
 		pfn += (1 << order);

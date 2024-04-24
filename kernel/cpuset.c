@@ -952,13 +952,14 @@ static int update_cpumask(struct cpuset *cs, struct cpuset *trialcs,
 
 		cpumask_and(trialcs->cpus_allowed, trialcs->cpus_requested, cpu_active_mask);
 	}
-	retval = validate_change(cs, trialcs);
-	if (retval < 0)
-		return retval;
 
 	/* Nothing to do if the cpus didn't change */
 	if (cpumask_equal(cs->cpus_requested, trialcs->cpus_requested))
 		return 0;
+
+	retval = validate_change(cs, trialcs);
+	if (retval < 0)
+		return retval;
 
 	retval = heap_init(&heap, PAGE_SIZE, GFP_KERNEL, NULL);
 	if (retval)
@@ -2145,43 +2146,66 @@ static void remove_tasks_in_empty_cpuset(struct cpuset *cs)
 }
 
 /**
- * cpuset_propagate_hotplug_workfn - propagate CPU/memory hotplug to a cpuset
+ * cpuset_hotplug_update_tasks - update tasks in a cpuset for hotunplug
  * @cs: cpuset in interest
  *
  * Compare @cs's cpu and mem masks against top_cpuset and if some have gone
  * offline, update @cs accordingly.  If @cs ends up with no CPU or memory,
  * all its tasks are moved to the nearest ancestor with both resources.
  */
-static void cpuset_propagate_hotplug_workfn(struct work_struct *work)
+static void cpuset_hotplug_update_tasks(struct cpuset *cs)
 {
 	static cpumask_t diff, new_allowed;
-	static nodemask_t off_mems, tmp_mems;
-	struct cpuset *cs = container_of(work, struct cpuset, hotplug_work);
+	static nodemask_t off_mems;
 	bool is_empty;
+	bool sane = cgroup_sane_behavior(cs->css.cgroup);
+
+retry:
+	wait_event(cpuset_attach_wq, cs->attach_in_progress == 0);
 
 	mutex_lock(&cpuset_mutex);
+
+	/*
+	 * We have raced with task attaching. We wait until attaching
+	 * is finished, so we won't attach a task to an empty cpuset.
+	 */
+	if (cs->attach_in_progress) {
+		mutex_unlock(&cpuset_mutex);
+		goto retry;
+	}
 
 	cpumask_and(&new_allowed, cs->cpus_requested, top_cpuset.cpus_allowed);
 	cpumask_xor(&diff, &new_allowed, cs->cpus_allowed);
 
 	nodes_andnot(off_mems, cs->mems_allowed, top_cpuset.mems_allowed);
 
-	/* remove offline cpus from @cs */
-	if (!cpumask_empty(&diff)) {
-		mutex_lock(&callback_mutex);
-		cpumask_copy(cs->cpus_allowed, &new_allowed);
-		mutex_unlock(&callback_mutex);
-		update_tasks_cpumask(cs, NULL);
-	}
+	mutex_lock(&callback_mutex);
+	cpumask_andnot(cs->cpus_allowed, cs->cpus_allowed, &off_cpus);
+	mutex_unlock(&callback_mutex);
 
-	/* remove offline mems from @cs */
-	if (!nodes_empty(off_mems)) {
-		tmp_mems = cs->mems_allowed;
-		mutex_lock(&callback_mutex);
-		nodes_andnot(cs->mems_allowed, cs->mems_allowed, off_mems);
-		mutex_unlock(&callback_mutex);
-		update_tasks_nodemask(cs, &tmp_mems, NULL);
-	}
+	/*
+	 * If sane_behavior flag is set, we need to update tasks' cpumask
+	 * for empty cpuset to take on ancestor's cpumask. Otherwise, don't
+	 * call update_tasks_cpumask() if the cpuset becomes empty, as
+	 * the tasks in it will be migrated to an ancestor.
+	 */
+	if ((sane && cpumask_empty(cs->cpus_allowed)) ||
+	    (!cpumask_empty(&off_cpus) && !cpumask_empty(cs->cpus_allowed)))
+		update_tasks_cpumask(cs, NULL);
+
+	mutex_lock(&callback_mutex);
+	nodes_andnot(cs->mems_allowed, cs->mems_allowed, off_mems);
+	mutex_unlock(&callback_mutex);
+
+	/*
+	 * If sane_behavior flag is set, we need to update tasks' nodemask
+	 * for empty cpuset to take on ancestor's nodemask. Otherwise, don't
+	 * call update_tasks_nodemask() if the cpuset becomes empty, as
+	 * the tasks in it will be migratd to an ancestor.
+	 */
+	if ((sane && nodes_empty(cs->mems_allowed)) ||
+	    (!nodes_empty(off_mems) && !nodes_empty(cs->mems_allowed)))
+		update_tasks_nodemask(cs, NULL);
 
 	is_empty = cpumask_empty(cs->cpus_allowed) ||
 		nodes_empty(cs->mems_allowed);
@@ -2247,28 +2271,32 @@ static void cpuset_hotplug_workfn(struct work_struct *work)
 
 	/* synchronize mems_allowed to N_MEMORY */
 	if (mems_updated) {
-		tmp_mems = top_cpuset.mems_allowed;
 		mutex_lock(&callback_mutex);
 		top_cpuset.mems_allowed = new_mems;
 		mutex_unlock(&callback_mutex);
-		update_tasks_nodemask(&top_cpuset, &tmp_mems, NULL);
+		update_tasks_nodemask(&top_cpuset, NULL);
 	}
 
-	/* if cpus or mems went down, we need to propagate to descendants */
+	mutex_unlock(&cpuset_mutex);
+
+	/* if cpus or mems changed, we need to propagate to descendants */
 	if (cpus_updated || mems_updated) {
 		struct cpuset *cs;
 		struct cgroup *pos_cgrp;
 
 		rcu_read_lock();
-		cpuset_for_each_descendant_pre(cs, pos_cgrp, &top_cpuset)
-			schedule_cpuset_propagate_hotplug(cs);
+		cpuset_for_each_descendant_pre(cs, pos_cgrp, &top_cpuset) {
+			if (!css_tryget(&cs->css))
+				continue;
+			rcu_read_unlock();
+
+		cpuset_hotplug_update_tasks(cs);
+
+			rcu_read_lock();
+			css_put(&cs->css);
+		}
 		rcu_read_unlock();
 	}
-
-	mutex_unlock(&cpuset_mutex);
-
-	/* wait for propagations to finish */
-	flush_workqueue(cpuset_propagate_hotplug_wq);
 
 	/* rebuild sched domains if cpus_allowed has changed */
 	if (cpus_updated || force_rebuild) {

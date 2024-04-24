@@ -118,6 +118,9 @@ struct sdhci_host {
 /* The system physically doesn't support 1.8v, even if the host does */
 #define SDHCI_QUIRK2_NO_1_8_V				(1<<2)
 #define SDHCI_QUIRK2_PRESET_VALUE_BROKEN		(1<<3)
+#define SDHCI_QUIRK2_CARD_ON_NEEDS_BUS_ON		(1<<4)
+/* Controller has a non-standard host control register */
+#define SDHCI_QUIRK2_BROKEN_HOST_CONTROL		(1<<5)
 /*
  * Read Transfer Active/ Write Transfer Active may be not
  * de-asserted after end of transaction. Issue reset for DAT line.

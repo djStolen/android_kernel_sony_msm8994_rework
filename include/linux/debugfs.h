@@ -198,6 +198,11 @@ static inline struct dentry *debugfs_create_size_t(const char *name, umode_t mod
 {
 	return ERR_PTR(-ENODEV);
 }
+static inline struct dentry *debugfs_create_atomic_t(const char *name, umode_t mode,
+				     struct dentry *parent, atomic_t *value)
+{
+	return ERR_PTR(-ENODEV);
+}
 
 static inline struct dentry *debugfs_create_bool(const char *name, umode_t mode,
 						 struct dentry *parent,

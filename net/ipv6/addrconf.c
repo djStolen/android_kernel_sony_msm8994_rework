@@ -3215,18 +3215,19 @@ static void addrconf_rs_timer(unsigned long data)
 	if (idev->if_flags & IF_RA_RCVD)
 		goto out;
 
-	spin_lock(&ifp->lock);
-	if (ifp->probes++ < idev->cnf.rtr_solicits) {
-		/* The wait after the last probe can be shorter */
-		addrconf_mod_timer(ifp, AC_RS,
-				   (ifp->probes == idev->cnf.rtr_solicits) ?
-				   idev->cnf.rtr_solicit_delay :
-				   idev->cnf.rtr_solicit_interval);
-		spin_unlock(&ifp->lock);
+	if (idev->rs_probes++ < idev->cnf.rtr_solicits) {
+		if (!__ipv6_get_lladdr(idev, &lladdr, IFA_F_TENTATIVE))
+			ndisc_send_rs(idev->dev, &lladdr,
+				      &in6addr_linklocal_allrouters);
+		else
+			goto out;
 
-	ndisc_send_rs(idev->dev, &ifp->addr, &in6addr_linklocal_allrouters);
+		/* The wait after the last probe can be shorter */
+		addrconf_mod_rs_timer(idev, (idev->rs_probes ==
+					     idev->cnf.rtr_solicits) ?
+				      idev->cnf.rtr_solicit_delay :
+				      idev->cnf.rtr_solicit_interval);
 	} else {
-		spin_unlock(&ifp->lock);
 		/*
 		 * Note: we do not support deprecated "all on-link"
 		 * assumption any longer.
@@ -3374,22 +3375,41 @@ static void addrconf_dad_completed(struct inet6_ifaddr *ifp)
 	   router advertisements, start sending router solicitations.
 	 */
 
-	if (ipv6_accept_ra(ifp->idev) &&
-	    ifp->idev->cnf.rtr_solicits != 0 &&
-	    (dev->flags&IFF_LOOPBACK) == 0 &&
-	    (ipv6_addr_type(&ifp->addr) & IPV6_ADDR_LINKLOCAL)) {
+	read_lock_bh(&ifp->idev->lock);
+	spin_lock(&ifp->lock);
+	send_mld = ipv6_addr_type(&ifp->addr) & IPV6_ADDR_LINKLOCAL &&
+		   ifp->idev->valid_ll_addr_cnt == 1;
+	send_rs = send_mld &&
+		  ipv6_accept_ra(ifp->idev) &&
+		  ifp->idev->cnf.rtr_solicits > 0 &&
+		  (dev->flags&IFF_LOOPBACK) == 0;
+	spin_unlock(&ifp->lock);
+	read_unlock_bh(&ifp->idev->lock);
+
+	/* While dad is in progress mld report's source address is in6_addrany.
+	 * Resend with proper ll now.
+	 */
+	if (send_mld)
+		ipv6_mc_dad_complete(ifp->idev);
+
+	if (send_rs) {
 		/*
 		 *	If a host as already performed a random delay
 		 *	[...] as part of DAD [...] there is no need
 		 *	to delay again before sending the first RS
 		 */
-		ndisc_send_rs(ifp->idev->dev, &ifp->addr, &in6addr_linklocal_allrouters);
+		if (ipv6_get_lladdr(dev, &lladdr, IFA_F_TENTATIVE))
+			return;
+		ndisc_send_rs(dev, &lladdr, &in6addr_linklocal_allrouters);
 
-		spin_lock_bh(&ifp->lock);
-		ifp->probes = 1;
+		write_lock_bh(&ifp->idev->lock);
+		spin_lock(&ifp->lock);
+		ifp->idev->rs_probes = 1;
 		ifp->idev->if_flags |= IF_RS_SENT;
-		addrconf_mod_timer(ifp, AC_RS, ifp->idev->cnf.rtr_solicit_interval);
-		spin_unlock_bh(&ifp->lock);
+		addrconf_mod_rs_timer(ifp->idev,
+				      ifp->idev->cnf.rtr_solicit_interval);
+		spin_unlock(&ifp->lock);
+		write_unlock_bh(&ifp->idev->lock);
 	}
 }
 

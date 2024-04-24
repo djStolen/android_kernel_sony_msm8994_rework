@@ -1077,10 +1077,15 @@ static bool randomize_choice_values(struct symbol *csym)
 		else {
 			sym->def[S_DEF_USER].tri = no;
 		}
+		sym->flags |= SYMBOL_DEF_USER;
+		/* clear VALID to get value calculated */
+		sym->flags &= ~SYMBOL_VALID;
 	}
 	csym->flags |= SYMBOL_DEF_USER;
 	/* clear VALID to get value calculated */
 	csym->flags &= ~(SYMBOL_VALID);
+	
+	return true;
 }
 
 void set_all_choice_values(struct symbol *csym)
@@ -1103,7 +1108,7 @@ void set_all_choice_values(struct symbol *csym)
 	csym->flags &= ~(SYMBOL_VALID | SYMBOL_NEED_SET_CHOICE_VALUES);
 }
 
-void conf_set_all_new_symbols(enum conf_def_mode mode)
+bool conf_set_all_new_symbols(enum conf_def_mode mode)
 {
 	struct symbol *sym, *csym;
 	int i, cnt, pby, pty, ptm;	/* pby: probability of boolean  = y
@@ -1218,6 +1223,12 @@ void conf_set_all_new_symbols(enum conf_def_mode mode)
 
 		sym_calc_value(csym);
 		if (mode == def_random)
-			randomize_choice_values(csym);
+			has_changed = randomize_choice_values(csym);
+		else {
+ 			set_all_choice_values(csym);
+			has_changed = true;
+		}
 	}
+	
+	return has_changed;
 }

@@ -102,60 +102,56 @@ int __ext4_check_dir_entry(const char *function, unsigned int line,
 	return 1;
 }
 
-static int ext4_readdir(struct file *filp,
-			 void *dirent, filldir_t filldir)
+static int ext4_readdir(struct file *file, struct dir_context *ctx)
 {
-	int error = 0;
 	unsigned int offset;
 	int i, stored;
 	struct ext4_dir_entry_2 *de;
 	int err;
-	struct inode *inode = file_inode(filp);
+	struct inode *inode = file_inode(file);
 	struct super_block *sb = inode->i_sb;
-	int ret = 0;
 	int dir_has_error = 0;
 
 	if (is_dx_dir(inode)) {
-		err = ext4_dx_readdir(filp, dirent, filldir);
+		err = ext4_dx_readdir(file, ctx);
 		if (err != ERR_BAD_DX_DIR) {
-			ret = err;
-			goto out;
+			return err;
 		}
 		/*
 		 * We don't set the inode dirty flag since it's not
 		 * critical that it get flushed back to the disk.
 		 */
-		ext4_clear_inode_flag(file_inode(filp),
+		ext4_clear_inode_flag(file_inode(file),
 				      EXT4_INODE_INDEX);
 	}
 
 	if (ext4_has_inline_data(inode)) {
 		int has_inline_data = 1;
-		ret = ext4_read_inline_dir(filp, dirent, filldir,
+		int ret = ext4_read_inline_dir(file, ctx,
 					   &has_inline_data);
 		if (has_inline_data)
 			return ret;
 	}
 
 	stored = 0;
-	offset = filp->f_pos & (sb->s_blocksize - 1);
+	offset = ctx->pos & (sb->s_blocksize - 1);
 
-	while (!error && !stored && filp->f_pos < inode->i_size) {
+	while (ctx->pos < inode->i_size) {
 		struct ext4_map_blocks map;
 		struct buffer_head *bh = NULL;
 
-		map.m_lblk = filp->f_pos >> EXT4_BLOCK_SIZE_BITS(sb);
+		map.m_lblk = ctx->pos >> EXT4_BLOCK_SIZE_BITS(sb);
 		map.m_len = 1;
 		err = ext4_map_blocks(NULL, inode, &map, 0);
 		if (err > 0) {
 			pgoff_t index = map.m_pblk >>
 					(PAGE_CACHE_SHIFT - inode->i_blkbits);
-			if (!ra_has_index(&filp->f_ra, index))
+			if (!ra_has_index(&file->f_ra, index))
 				page_cache_sync_readahead(
 					sb->s_bdev->bd_inode->i_mapping,
-					&filp->f_ra, filp,
+					&file->f_ra, file,
 					index, 1);
-			filp->f_ra.prev_pos = (loff_t)index << PAGE_CACHE_SHIFT;
+			file->f_ra.prev_pos = (loff_t)index << PAGE_CACHE_SHIFT;
 			bh = ext4_bread(NULL, inode, map.m_lblk, 0);
 			if (IS_ERR(bh))
 				return PTR_ERR(bh);

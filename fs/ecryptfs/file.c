@@ -66,18 +66,16 @@ static ssize_t ecryptfs_read_update_atime(struct kiocb *iocb,
 	if (-EIOCBQUEUED == rc)
 		rc = wait_on_sync_kiocb(iocb);
 	if (rc >= 0) {
-		lower.dentry = ecryptfs_dentry_to_lower(file->f_path.dentry);
-		lower.mnt = ecryptfs_dentry_to_lower_mnt(file->f_path.dentry);
-		touch_atime(&lower);
+		path = ecryptfs_dentry_to_lower_path(file->f_path.dentry);
+		touch_atime(path);
 	}
 	return rc;
 }
 
 struct ecryptfs_getdents_callback {
 	struct dir_context ctx;
-	void *dirent;
-	struct dentry *dentry;
-	filldir_t filldir;
+	struct dir_context *caller;
+	struct super_block *sb;
 	int filldir_called;
 	int entries_written;
 };
@@ -115,28 +113,21 @@ out:
 /**
  * ecryptfs_readdir
  * @file: The eCryptfs directory file
- * @dirent: Directory entry handle
- * @filldir: The filldir callback function
+ * @ctx: The actor to feed the entries to
  */
-static int ecryptfs_readdir(struct file *file, void *dirent, filldir_t filldir)
-{
+static int ecryptfs_readdir(struct file *file, struct dir_context *ctx){
 	int rc;
 	struct file *lower_file;
-	struct inode *inode;
+	struct inode *inode = file_inode(file);
 	struct ecryptfs_getdents_callback buf = {
-		.dirent = dirent,
-		.dentry = file->f_path.dentry,
-		.filldir = filldir,
-		.filldir_called = 0,
-		.entries_written = 0,
-		.ctx.actor = ecryptfs_filldir
+		.ctx.actor = ecryptfs_filldir,
+		.caller = ctx,
+		.sb = inode->i_sb,
 	};
-
 	lower_file = ecryptfs_file_to_lower(file);
-	lower_file->f_pos = file->f_pos;
-	inode = file_inode(file);
+	lower_file->f_pos = ctx->pos;
 	rc = iterate_dir(lower_file, &buf.ctx);
-	file->f_pos = lower_file->f_pos;
+	ctx->pos = buf.ctx.pos;
 	if (rc < 0)
 		goto out;
 	if (buf.filldir_called && !buf.entries_written)

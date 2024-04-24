@@ -177,31 +177,19 @@ struct ext4_map_blocks {
 };
 
 /*
- * For delayed allocation tracking
- */
-struct mpage_da_data {
-	struct inode *inode;
-	sector_t b_blocknr;		/* start block number of extent */
-	size_t b_size;			/* size of extent */
-	unsigned long b_state;		/* state of the extent */
-	unsigned long first_page, next_page;	/* extent of pages */
-	struct writeback_control *wbc;
-	int io_done;
-	int pages_written;
-	int retval;
-};
-
-/*
  * Flags for ext4_io_end->flags
  */
 #define	EXT4_IO_END_UNWRITTEN	0x0001
 #define EXT4_IO_END_DIRECT	0x0002
 
 /*
- * For converting uninitialized extents on a work queue.
+ * For converting uninitialized extents on a work queue. 'handle' is used for
+ * buffered writeback.
  */
 typedef struct ext4_io_end {
 	struct list_head	list;		/* per-file finished IO list */
+	handle_t		*handle;	/* handle reserved for extent
+						 * conversion */
 	struct inode		*inode;		/* file being written to */
 	struct bio		*bio;		/* Linked list of completed
 						 * bios covering the extent */
@@ -2709,14 +2697,14 @@ extern int ext4_move_extents(struct file *o_filp, struct file *d_filp,
 /* page-io.c */
 extern int __init ext4_init_pageio(void);
 extern void ext4_exit_pageio(void);
-extern void ext4_ioend_shutdown(struct inode *);
 extern ext4_io_end_t *ext4_init_io_end(struct inode *inode, gfp_t flags);
 extern ext4_io_end_t *ext4_get_io_end(ext4_io_end_t *io_end);
 extern int ext4_put_io_end(ext4_io_end_t *io_end);
 extern void ext4_put_io_end_defer(ext4_io_end_t *io_end);
 extern void ext4_io_submit_init(struct ext4_io_submit *io,
 				struct writeback_control *wbc);
-extern void ext4_end_io_work(struct work_struct *work);
+extern void ext4_end_io_rsv_work(struct work_struct *work);
+extern void ext4_end_io_unrsv_work(struct work_struct *work);
 extern void ext4_io_submit(struct ext4_io_submit *io);
 extern int ext4_bio_write_page(struct ext4_io_submit *io,
 			       struct page *page,

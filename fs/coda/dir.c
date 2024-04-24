@@ -390,41 +390,23 @@ static int coda_readdir(struct file *coda_file, struct dir_context *ctx)
 	if (!host_file->f_op)
 		return -ENOTDIR;
 
-	if (host_file->f_op->readdir) {
-		/* potemkin case: we were handed a directory inode.
-		 * We can't use vfs_readdir because we have to keep the file
-		 * position in sync between the coda_file and the host_file.
-		 * and as such we need grab the inode mutex. */
+	if (host_file->f_op->iterate) {
 		struct inode *host_inode = file_inode(host_file);
 
 		mutex_lock(&host_inode->i_mutex);
-		host_file->f_pos = coda_file->f_pos;
 
-		ret = -ENOENT;
-		if (!IS_DEADDIR(host_inode)) {
-			ret = host_file->f_op->readdir(host_file, buf, filldir);
-			file_accessed(host_file);
-		}
-
-		coda_file->f_pos = host_file->f_pos;
-		mutex_unlock(&host_inode->i_mutex);
-	} else if (host_file->f_op->iterate) {
-		struct inode *host_inode = file_inode(host_file);
-		struct dir_context *ctx = buf;
-
-		mutex_lock(&host_inode->i_mutex);
 		ret = -ENOENT;
 		if (!IS_DEADDIR(host_inode)) {
 			ret = host_file->f_op->iterate(host_file, ctx);
 			file_accessed(host_file);
 		}
+
 		mutex_unlock(&host_inode->i_mutex);
-
-		coda_file->f_pos = ctx->pos;
-	} else /* Venus: we must read Venus dirents from a file */
-		ret = coda_venus_readdir(coda_file, buf, filldir);
-
-	return ret;
+		return ret;
+	}
+	
+	/* Venus: we must read Venus dirents from a file */
+	return coda_venus_readdir(coda_file, ctx);
 }
 
 static inline unsigned int CDT2DT(unsigned char cdt)

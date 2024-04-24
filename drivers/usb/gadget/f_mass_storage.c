@@ -704,6 +704,7 @@ static int sleep_thread(struct fsg_common *common)
 	spin_lock_irq(&common->lock);
 	common->thread_wakeup_needed = 0;
 	spin_unlock_irq(&common->lock);
+	smp_rmb();	/* ensure the latest bh->state is visible */
 	return rc;
 }
 
@@ -3178,7 +3179,9 @@ buffhds_first_it:
 	snprintf(common->inquiry_string, sizeof common->inquiry_string,
 		 "%-8s%-16s%04x", cfg->vendor_name ?: "Linux",
 		 /* Assume product name dependent on the first LUN */
-		 cfg->product_name ?: "File-Stor Gadget",
+		 cfg->product_name ?: (common->luns->cdrom
+				     ? "File-CD Gadget"
+				     : "File-Stor Gadget"),
 		 i);
 	snprintf(common->cdrom_inquiry_string,
 		 sizeof common->cdrom_inquiry_string,

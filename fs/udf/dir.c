@@ -162,25 +162,22 @@ static int udf_readdir(struct file *file, struct dir_context *ctx)
 		}
 
 		if (cfi.fileCharacteristics & FID_FILE_CHAR_PARENT) {
-			iblock = parent_ino(filp->f_path.dentry);
-			flen = 2;
-			memcpy(fname, "..", flen);
-			dt_type = DT_DIR;
-		} else {
-			struct kernel_lb_addr tloc = lelb_to_cpu(cfi.icb.extLocation);
-
-			iblock = udf_get_lb_pblock(dir->i_sb, &tloc, 0);
-			flen = udf_get_filename(dir->i_sb, nameptr, lfi, fname,
-						UDF_NAME_LEN);
-			dt_type = DT_UNKNOWN;
+			if (!dir_emit_dotdot(file, ctx))
+				goto out;
+			continue;
 		}
 
-		if (flen && filldir(dirent, fname, flen, filp->f_pos,
-				    iblock, dt_type) < 0)
+		flen = udf_get_filename(dir->i_sb, nameptr, fname, lfi);
+		if (!flen)
+			continue;
+
+		tloc = lelb_to_cpu(cfi.icb.extLocation);
+		iblock = udf_get_lb_pblock(dir->i_sb, &tloc, 0);
+		if (!dir_emit(ctx, fname, flen, iblock, DT_UNKNOWN))
 			goto out;
 	} /* end while */
 
-	filp->f_pos = (nf_pos >> 2) + 1;
+	ctx->pos = (nf_pos >> 2) + 1;
 
 out:
 	if (fibh.sbh != fibh.ebh)

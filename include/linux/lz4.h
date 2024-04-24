@@ -9,8 +9,13 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
+/* TODO: djStolen; Sony modified file from Linux Kernel 3.10
 #define LZ4_MEM_COMPRESS	(16384)
 #define LZ4HC_MEM_COMPRESS	(262144 + (2 * sizeof(unsigned char *)))
+*/
+
+#define LZ4_MEM_COMPRESS	(4096 * sizeof(unsigned char *))
+#define LZ4HC_MEM_COMPRESS	(65538 * sizeof(unsigned char *))
 
 /*
  * lz4_compressbound()
@@ -67,8 +72,12 @@ int lz4hc_compress(const unsigned char *src, size_t src_len,
  *	note :  Destination buffer must be already allocated.
  *		slightly faster than lz4_decompress_unknownoutputsize()
  */
+/* TODO: djStolen; Sony modified file from Linux Kernel 3.10
 int lz4_decompress(const unsigned char *src, size_t *src_len,
 		unsigned char *dest, size_t actual_dest_len);
+ */
+int lz4_decompress(const char *src, size_t *src_len, char *dest,
+		size_t actual_dest_len);
 
 /*
  * lz4_decompress_unknownoutputsize()
@@ -82,6 +91,10 @@ int lz4_decompress(const unsigned char *src, size_t *src_len,
  *		  Error if return (< 0)
  *	note :  Destination buffer must be already allocated.
  */
+/* TODO: djStolen; Sony modified file from Linux Kernel 3.10
 int lz4_decompress_unknownoutputsize(const unsigned char *src, size_t src_len,
 		unsigned char *dest, size_t *dest_len);
+*/
+int lz4_decompress_unknownoutputsize(const char *src, size_t src_len,
+		char *dest, size_t *dest_len);
 #endif

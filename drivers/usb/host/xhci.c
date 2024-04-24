@@ -786,7 +786,7 @@ void xhci_shutdown(struct usb_hcd *hcd)
 #ifdef CONFIG_PM
 
 #ifdef CONFIG_PCI
-static void xhci_msix_sync_irqs(struct xhci_hcd *xhci)
+static void __maybe_unused xhci_msix_sync_irqs(struct xhci_hcd *xhci)
 {
 	int i;
 
@@ -796,7 +796,7 @@ static void xhci_msix_sync_irqs(struct xhci_hcd *xhci)
 	}
 }
 #else
-static void xhci_msix_sync_irqs(struct xhci_hcd *xhci)
+static void __maybe_unused xhci_msix_sync_irqs(struct xhci_hcd *xhci)
 {
 }
 #endif /* CONFIG_PCI */
@@ -4186,11 +4186,12 @@ int xhci_set_usb2_hardware_lpm(struct usb_hcd *hcd,
 {
 	struct xhci_hcd	*xhci = hcd_to_xhci(hcd);
 	__le32 __iomem	**port_array;
-	__le32 __iomem	*pm_addr;
-	u32		temp;
+	__le32 __iomem	*pm_addr, *hlpm_addr;
+	u32		pm_val, hlpm_val, field;
 	unsigned int	port_num;
 	unsigned long	flags;
-	int		hird;
+	int		hird, exit_latency;
+	int		ret;
 	bool		delay = false;
 
 	if (hcd->speed == HCD_USB3 || !xhci->hw_lpm_support ||
@@ -4211,33 +4212,100 @@ int xhci_set_usb2_hardware_lpm(struct usb_hcd *hcd,
 
 	port_array = xhci->usb2_ports;
 	port_num = udev->portnum - 1;
-	pm_addr = port_array[port_num] + 1;
-	temp = xhci_readl(xhci, pm_addr);
+	pm_addr = port_array[port_num] + PORTPMSC;
+	pm_val = xhci_readl(xhci, pm_addr);
+	hlpm_addr = port_array[port_num] + PORTHLPMC;
+	field = le32_to_cpu(udev->bos->ext_cap->bmAttributes);
 
 	xhci_dbg(xhci, "%s port %d USB2 hardware LPM\n",
 			enable ? "enable" : "disable", port_num);
 
-	hird = xhci_calculate_hird_besl(xhci, udev);
-
 	if (enable) {
-		temp &= ~PORT_HIRD_MASK;
-		temp |= PORT_HIRD(hird) | PORT_RWE;
-		xhci_writel(xhci, temp, pm_addr);
-		if (delay)
-			ndelay(100);
-		temp = xhci_readl(xhci, pm_addr);
-		temp |= PORT_HLE;
-		xhci_writel(xhci, temp, pm_addr);
-		if (delay)
-			ndelay(100);
+		/* Host supports BESL timeout instead of HIRD */
+		if (udev->usb2_hw_lpm_besl_capable) {
+			/* if device doesn't have a preferred BESL value use a
+			 * default one which works with mixed HIRD and BESL
+			 * systems. See XHCI_DEFAULT_BESL definition in xhci.h
+			 */
+			if ((field & USB_BESL_SUPPORT) &&
+			    (field & USB_BESL_BASELINE_VALID))
+				hird = USB_GET_BESL_BASELINE(field);
+			else
+				hird = udev->l1_params.besl;
+
+			exit_latency = xhci_besl_encoding[hird];
+			spin_unlock_irqrestore(&xhci->lock, flags);
+
+			/* USB 3.0 code dedicate one xhci->lpm_command->in_ctx
+			 * input context for link powermanagement evaluate
+			 * context commands. It is protected by hcd->bandwidth
+			 * mutex and is shared by all devices. We need to set
+			 * the max ext latency in USB 2 BESL LPM as well, so
+			 * use the same mutex and xhci_change_max_exit_latency()
+			 */
+			mutex_lock(hcd->bandwidth_mutex);
+			ret = xhci_change_max_exit_latency(xhci, udev,
+							   exit_latency);
+			mutex_unlock(hcd->bandwidth_mutex);
+
+			if (ret < 0)
+				return ret;
+			spin_lock_irqsave(&xhci->lock, flags);
+
+			hlpm_val = xhci_calculate_usb2_hw_lpm_params(udev);
+			xhci_writel(xhci, hlpm_val, hlpm_addr);
+			/* flush write */
+			xhci_readl(xhci, hlpm_addr);
+		} else {
+			hird = xhci_calculate_hird_besl(xhci, udev);
+		}
+
+		pm_val &= ~PORT_HIRD_MASK;
+		pm_val |= PORT_HIRD(hird) | PORT_RWE;
+		xhci_writel(xhci, pm_val, pm_addr);
+		pm_val = xhci_readl(xhci, pm_addr);
+		pm_val |= PORT_HLE;
+		xhci_writel(xhci, pm_val, pm_addr);
+		/* flush write */
+		xhci_readl(xhci, pm_addr);
 	} else {
-		temp &= ~(PORT_HLE | PORT_RWE | PORT_HIRD_MASK);
-		xhci_writel(xhci, temp, pm_addr);
-		if (delay)
-			ndelay(100);
+		pm_val &= ~(PORT_HLE | PORT_RWE | PORT_HIRD_MASK);
+		xhci_writel(xhci, pm_val, pm_addr);
+		/* flush write */
+		xhci_readl(xhci, pm_addr);
+		if (udev->usb2_hw_lpm_besl_capable) {
+			spin_unlock_irqrestore(&xhci->lock, flags);
+			mutex_lock(hcd->bandwidth_mutex);
+			xhci_change_max_exit_latency(xhci, udev, 0);
+			mutex_unlock(hcd->bandwidth_mutex);
+			return 0;
+		}
 	}
 
 	spin_unlock_irqrestore(&xhci->lock, flags);
+	return 0;
+}
+
+/* check if a usb2 port supports a given extened capability protocol
+ * only USB2 ports extended protocol capability values are cached.
+ * Return 1 if capability is supported
+ */
+static int xhci_check_usb2_port_capability(struct xhci_hcd *xhci, int port,
+					   unsigned capability)
+{
+	u32 port_offset, port_count;
+	int i;
+
+	for (i = 0; i < xhci->num_ext_caps; i++) {
+		if (xhci->ext_caps[i] & capability) {
+			/* port offsets starts at 1 */
+			port_offset = XHCI_EXT_PORT_OFF(xhci->ext_caps[i]) - 1;
+			port_count = XHCI_EXT_PORT_COUNT(xhci->ext_caps[i]);
+			if (port >= port_offset &&
+			    port < port_offset + port_count)
+				return 1;
+		}
+	}
 	return 0;
 }
 
@@ -4245,12 +4313,19 @@ int xhci_update_device(struct usb_hcd *hcd, struct usb_device *udev)
 {
 	struct xhci_hcd	*xhci = hcd_to_xhci(hcd);
 	int		ret;
+	int		portnum = udev->portnum - 1;
 
 	ret = xhci_usb2_software_lpm_test(hcd, udev);
 	if (!ret) {
 		xhci_dbg(xhci, "software LPM test succeed\n");
-		if (xhci->hw_lpm_support == 1) {
+		if (xhci->hw_lpm_support == 1 &&
+		    xhci_check_usb2_port_capability(xhci, portnum, XHCI_HLC)) {
 			udev->usb2_hw_lpm_capable = 1;
+			udev->l1_params.timeout = XHCI_L1_TIMEOUT;
+			udev->l1_params.besl = XHCI_DEFAULT_BESL;
+			if (xhci_check_usb2_port_capability(xhci, portnum,
+							    XHCI_BLC))
+				udev->usb2_hw_lpm_besl_capable = 1;
 			ret = xhci_set_usb2_hardware_lpm(hcd, udev, 1);
 			if (!ret)
 				udev->usb2_hw_lpm_enabled = 1;

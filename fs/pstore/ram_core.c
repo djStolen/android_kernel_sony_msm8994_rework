@@ -469,6 +469,18 @@ static void *persistent_ram_iomap(phys_addr_t start, size_t size,
 		return NULL;
 	}
 
+/* TODO: djStolen
+ * Linux 3.11 looks here different; so leaving out for now.
+  		return NULL;
+ 	}
+ 
++	buffer_start_add = buffer_start_add_locked;
++	buffer_size_add = buffer_size_add_locked;
++
+ 	return ioremap(start, size);
+ }
+ * */
+
 	if (memtype)
 		va = ioremap(start, size);
 	else

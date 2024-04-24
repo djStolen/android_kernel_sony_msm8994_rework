@@ -26,6 +26,7 @@
 #include <linux/capability.h>
 #include <linux/slab.h>
 #include <linux/err.h>
+#include <linux/string.h>
 #include <linux/bio.h>
 
 struct linux_binprm;

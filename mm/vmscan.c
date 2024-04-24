@@ -1019,7 +1019,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 			 */
 			if (page_is_file_cache(page) &&
 					(!current_is_kswapd() ||
-				(zone && !zone_is_reclaim_dirty(zone)))) {
+					!zone_is_reclaim_dirty(zone))) {
 				/*
 				 * Immediately reclaim when written back.
 				 * Similar in principal to deactivate_page()
@@ -2104,7 +2104,7 @@ static void shrink_lruvec(struct lruvec *lruvec, struct scan_control *sc)
 	unsigned long nr_reclaimed = 0;
 	unsigned long nr_to_reclaim = sc->nr_to_reclaim;
 	struct blk_plug plug;
-	bool scan_adjusted;
+	bool scan_adjusted = false;
 
 	get_scan_count(lruvec, sc, nr);
 
@@ -2143,6 +2143,15 @@ static void shrink_lruvec(struct lruvec *lruvec, struct scan_control *sc)
 
 		if (nr_reclaimed < nr_to_reclaim || scan_adjusted)
 			continue;
+
+ 		/*
+		 * For global direct reclaim, reclaim only the number of pages
+		 * requested. Less care is taken to scan proportionally as it
+		 * is more important to minimise direct reclaim stall latency
+		 * than it is to properly age the LRU lists.
+ 		 */
+		if (global_reclaim(sc) && !current_is_kswapd())
+ 			break;
 
 		/*
 		 * For kswapd and memcg, reclaim at least the number of pages

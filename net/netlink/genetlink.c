@@ -610,15 +610,34 @@ static int genl_family_rcv_msg(struct genl_family *family,
 		return -EPERM;
 
 	if ((nlh->nlmsg_flags & NLM_F_DUMP) == NLM_F_DUMP) {
-		struct netlink_dump_control c = {
-			.dump = ops->dumpit,
-			.done = ops->done,
-		};
+		int rc;
 
 		if (ops->dumpit == NULL)
 			return -EOPNOTSUPP;
 
-		return netlink_dump_start(net->genl_sock, skb, nlh, &c);
+		if (!family->parallel_ops) {
+			struct netlink_dump_control c = {
+				.module = family->module,
+				.data = ops,
+				.dump = genl_lock_dumpit,
+				.done = genl_lock_done,
+			};
+
+			genl_unlock();
+			rc = __netlink_dump_start(net->genl_sock, skb, nlh, &c);
+			genl_lock();
+
+		} else {
+			struct netlink_dump_control c = {
+				.module = family->module,
+				.dump = ops->dumpit,
+				.done = ops->done,
+			};
+
+			rc = __netlink_dump_start(net->genl_sock, skb, nlh, &c);
+		}
+
+		return rc;
 	}
 
 	if (ops->doit == NULL)

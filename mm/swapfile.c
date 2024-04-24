@@ -2218,10 +2218,37 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 			p->flags |= SWP_SOLIDSTATE;
 			p->cluster_next = 1 + (prandom_u32() % p->highest_bit);
 		}
-		if ((swap_flags & SWAP_FLAG_DISCARD) && discard_swap(p) == 0)
-			p->flags |= SWP_DISCARDABLE;
-		if (blk_queue_fast(bdev_get_queue(p->bdev)))
-			p->flags |= SWP_FAST;
+		
+		if ((swap_flags & SWAP_FLAG_DISCARD) && swap_discardable(p)) {
+			/*
+			 * When discard is enabled for swap with no particular
+			 * policy flagged, we set all swap discard flags here in
+			 * order to sustain backward compatibility with older
+			 * swapon(8) releases.
+			 */
+			p->flags |= (SWP_DISCARDABLE | SWP_AREA_DISCARD |
+				     SWP_PAGE_DISCARD);
+
+			/*
+			 * By flagging sys_swapon, a sysadmin can tell us to
+			 * either do single-time area discards only, or to just
+			 * perform discards for released swap page-clusters.
+			 * Now it's time to adjust the p->flags accordingly.
+			 */
+			if (swap_flags & SWAP_FLAG_DISCARD_ONCE)
+				p->flags &= ~SWP_PAGE_DISCARD;
+			else if (swap_flags & SWAP_FLAG_DISCARD_PAGES)
+				p->flags &= ~SWP_AREA_DISCARD;
+
+			/* issue a swapon-time discard if it's still required */
+			if (p->flags & SWP_AREA_DISCARD) {
+				int err = discard_swap(p);
+				if (unlikely(err))
+					printk(KERN_ERR
+					       "swapon: discard_swap(%p): %d\n",
+						p, err);
+			}
+		}
 	}
 
 	mutex_lock(&swapon_mutex);

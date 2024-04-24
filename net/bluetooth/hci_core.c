@@ -1212,8 +1212,6 @@ static int hci_dev_do_close(struct hci_dev *hdev)
 {
 	BT_DBG("%s %pK", hdev->name, hdev);
 
-	cancel_work_sync(&hdev->le_scan);
-
 	/* do not call cancel_delayed_work_sync for power_off here as
 	 * hci_dev_do_close function is called from work handler which might
 	 * cause deadlock. Instead to it in hci_unregister_dev
@@ -2173,16 +2171,15 @@ int hci_register_dev(struct hci_dev *hdev)
 
 	BT_DBG("%pK name %s bus %d", hdev, hdev->name, hdev->bus);
 
-	hdev->workqueue = alloc_workqueue(hdev->name, WQ_HIGHPRI | WQ_UNBOUND |
-					  WQ_MEM_RECLAIM, 1);
+	hdev->workqueue = alloc_workqueue("%s", WQ_HIGHPRI | WQ_UNBOUND |
+					  WQ_MEM_RECLAIM, 1, hdev->name);
 	if (!hdev->workqueue) {
 		error = -ENOMEM;
 		goto err;
 	}
 
-	hdev->req_workqueue = alloc_workqueue(hdev->name,
-					      WQ_HIGHPRI | WQ_UNBOUND |
-					      WQ_MEM_RECLAIM, 1);
+	hdev->req_workqueue = alloc_workqueue("%s", WQ_HIGHPRI | WQ_UNBOUND |
+					      WQ_MEM_RECLAIM, 1, hdev->name);
 	if (!hdev->req_workqueue) {
 		destroy_workqueue(hdev->workqueue);
 		error = -ENOMEM;

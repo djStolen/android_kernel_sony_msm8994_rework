@@ -1384,6 +1384,7 @@ alloc_new_skb:
 				(sk->sk_protocol == IPPROTO_UDP)) {
 				skb->ip_summed = CHECKSUM_PARTIAL;
 			} else {
+				skb->protocol = htons(ETH_P_IPV6);
 				skb->ip_summed = CHECKSUM_NONE;
 				skb->csum = 0;
 			}

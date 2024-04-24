@@ -173,9 +173,15 @@ socket_match(const struct sk_buff *skb, struct xt_action_param *par,
 	     const struct xt_socket_mtinfo1 *info)
 {
 	struct sk_buff *pskb = (struct sk_buff *)skb;
-	struct sock *sk;
+	struct sock *sk = skb->sk;
 
 	sk = xt_socket_get4_sk(skb, par);
+	
+	if (!sk)
+		sk = nf_tproxy_get_sock_v4(dev_net(skb->dev), protocol,
+					   saddr, daddr, sport, dport,
+					   par->in, NFT_LOOKUP_ANY);
+	
 	if (sk) {
 		bool wildcard;
 		bool transparent = true;
@@ -220,9 +226,15 @@ socket_mt4_v0(const struct sk_buff *skb, struct xt_action_param *par)
 }
 
 static bool
+socket_mt4_v1_v2(const struct sk_buff *skb, struct xt_action_param *par)
+{
+ 	return socket_match(skb, par, par->matchinfo);
+}
+
+static bool
 socket_mt4_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
 {
-	return socket_match(skb, par, par->matchinfo);
+	return socket_mt4_v1_v2(skb, par);
 }
 
 #ifdef XT_SOCKET_HAVE_IPV6
@@ -330,10 +342,10 @@ xt_socket_get6_sk(const struct sk_buff *skb, struct xt_action_param *par)
 EXPORT_SYMBOL(xt_socket_get6_sk);
 
 static bool
-socket_mt6_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
+socket_mt6_v1_v2(const struct sk_buff *skb, struct xt_action_param *par)
 {
 	struct sk_buff *pskb = (struct sk_buff *)skb;
-	struct sock *sk;
+	struct sock *sk = skb->sk;
 	const struct xt_socket_mtinfo1 *info;
 
 	info = (struct xt_socket_mtinfo1 *) par->matchinfo;
@@ -371,6 +383,11 @@ socket_mt6_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
 
 	return (sk != NULL);
 }
+static bool
+socket_mt6_v1_v2_v3(const struct sk_buff *skb, struct xt_action_param *par)
+{
+	return socket_mt6_v1_v2(skb, par);
+}
 #endif
 
 static int socket_mt_v1_check(const struct xt_mtchk_param *par)
@@ -403,28 +420,6 @@ static int socket_mt_v3_check(const struct xt_mtchk_param *par)
 	if (info->flags & ~XT_SOCKET_FLAGS_V3) {
 		pr_info("unknown flags 0x%x\n",
 			info->flags & ~XT_SOCKET_FLAGS_V3);
-		return -EINVAL;
-	}
-	return 0;
-}
-
-static int socket_mt_v1_check(const struct xt_mtchk_param *par)
-{
-	const struct xt_socket_mtinfo1 *info = (struct xt_socket_mtinfo1 *) par->matchinfo;
-
-	if (info->flags & ~XT_SOCKET_FLAGS_V1) {
-		pr_info("unknown flags 0x%x\n", info->flags & ~XT_SOCKET_FLAGS_V1);
-		return -EINVAL;
-	}
-	return 0;
-}
-
-static int socket_mt_v2_check(const struct xt_mtchk_param *par)
-{
-	const struct xt_socket_mtinfo2 *info = (struct xt_socket_mtinfo2 *) par->matchinfo;
-
-	if (info->flags & ~XT_SOCKET_FLAGS_V2) {
-		pr_info("unknown flags 0x%x\n", info->flags & ~XT_SOCKET_FLAGS_V2);
 		return -EINVAL;
 	}
 	return 0;

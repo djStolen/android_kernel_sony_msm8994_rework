@@ -215,78 +215,56 @@ static struct dentry *proc_lookupfd_common(struct inode *dir,
 out:
 	put_task_struct(task);
 out_no_task:
-	return result;
+	return ERR_PTR(result);
 }
 
-static int proc_readfd_common(struct file * filp, void * dirent,
-			      filldir_t filldir, instantiate_t instantiate)
+static int proc_readfd_common(struct file *file, struct dir_context *ctx,
+			      instantiate_t instantiate)
 {
-	struct dentry *dentry = filp->f_path.dentry;
-	struct inode *inode = dentry->d_inode;
-	struct task_struct *p = get_proc_task(inode);
+	struct task_struct *p = get_proc_task(file_inode(file));
 	struct files_struct *files;
-	unsigned int fd, ino;
-	int retval;
+	unsigned int fd;
 
-	retval = -ENOENT;
 	if (!p)
-		goto out_no_task;
-	retval = 0;
+		return -ENOENT;
+	if (!dir_emit_dots(file, ctx))
+		goto out;
+	files = get_files_struct(p);
+	if (!files)
+		goto out;
 
-	fd = filp->f_pos;
-	switch (fd) {
-		case 0:
-			if (filldir(dirent, ".", 1, 0, inode->i_ino, DT_DIR) < 0)
-				goto out;
-			filp->f_pos++;
-		case 1:
-			ino = parent_ino(dentry);
-			if (filldir(dirent, "..", 2, 1, ino, DT_DIR) < 0)
-				goto out;
-			filp->f_pos++;
-		default:
-			files = get_files_struct(p);
-			if (!files)
-				goto out;
-			rcu_read_lock();
-			for (fd = filp->f_pos - 2;
-			     fd < files_fdtable(files)->max_fds;
-			     fd++, filp->f_pos++) {
-				char name[PROC_NUMBUF];
-				int len;
-				int rv;
+	rcu_read_lock();
+	for (fd = ctx->pos - 2;
+	     fd < files_fdtable(files)->max_fds;
+	     fd++, ctx->pos++) {
+		char name[PROC_NUMBUF];
+		int len;
 
-				if (!fcheck_files(files, fd))
-					continue;
-				rcu_read_unlock();
+		if (!fcheck_files(files, fd))
+			continue;
+		rcu_read_unlock();
 
-				len = snprintf(name, sizeof(name), "%d", fd);
-				rv = proc_fill_cache(filp, dirent, filldir,
-						     name, len, instantiate, p,
-						     (void *)(unsigned long)fd);
-				if (rv < 0)
-					goto out_fd_loop;
-				cond_resched();
-				rcu_read_lock();
-			}
-			rcu_read_unlock();
-out_fd_loop:
-			put_files_struct(files);
+		len = snprintf(name, sizeof(name), "%d", fd);
+		if (!proc_fill_cache(file, ctx,
+				     name, len, instantiate, p,
+				     (void *)(unsigned long)fd))
+			goto out_fd_loop;
+		rcu_read_lock();
 	}
 out:
 	put_task_struct(p);
 out_no_task:
-	return retval;
+	return 0;
 }
 
-static int proc_readfd(struct file *filp, void *dirent, filldir_t filldir)
+static int proc_readfd(struct file *file, struct dir_context *ctx)
 {
-	return proc_readfd_common(filp, dirent, filldir, proc_fd_instantiate);
+	return proc_readfd_common(file, ctx, proc_fd_instantiate);
 }
 
 const struct file_operations proc_fd_operations = {
 	.read		= generic_read_dir,
-	.readdir	= proc_readfd,
+	.iterate	= proc_readfd,
 	.llseek		= default_llseek,
 };
 

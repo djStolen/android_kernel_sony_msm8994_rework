@@ -22,12 +22,15 @@
 
 #include <linux/slab.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/device.h>
 #include <linux/etherdevice.h>
 
 #include <linux/atomic.h>
 
 #include "u_ether.h"
+#include "u_ether_configfs.h"
+#include "u_rndis.h"
 #include "rndis.h"
 
 /*
@@ -943,13 +946,14 @@ fail:
 	return status;
 }
 
+#ifdef USB_FRNDIS_INCLUDED
+
 static void
-rndis_unbind(struct usb_configuration *c, struct usb_function *f)
+rndis_old_unbind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct f_rndis		*rndis = func_to_rndis(f);
 
 	rndis_deregister(rndis->config);
-	rndis_exit();
 
 	usb_free_all_descriptors(f);
 
@@ -967,23 +971,10 @@ rndis_bind_config_vendor(struct usb_configuration *c, u8 ethaddr[ETH_ALEN],
 	struct f_rndis	*rndis;
 	int		status;
 
-	if (!can_support_rndis(c) || !ethaddr)
-		return -EINVAL;
-
 	/* setup RNDIS itself */
-	status = rndis_init();
-	if (status < 0)
-		return status;
-
-	if (rndis_string_defs[0].id == 0) {
-		status = usb_string_ids_tab(c->cdev, rndis_string_defs);
-		if (status)
-			return status;
-
-		rndis_control_intf.iInterface = rndis_string_defs[0].id;
-		rndis_data_intf.iInterface = rndis_string_defs[1].id;
-		rndis_iad_descriptor.iFunction = rndis_string_defs[2].id;
-	}
+//	status = rndis_init();			//TODO: djStolen; not in Linux Kernel Version 3.11; either not needed at all or from version above 3.11
+//	if (status < 0)
+//		return status;
 
 	/* allocate and initialize one new instance */
 	status = -ENOMEM;

@@ -95,14 +95,17 @@ void *__aa_kvmalloc(size_t size, gfp_t flags)
 
 	/* do not attempt kmalloc if we need more than 16 pages at once */
 	if (size <= (16*PAGE_SIZE))
-		buffer = kmalloc(size, GFP_NOIO | __GFP_NOWARN);
+		buffer = kmalloc(size, flags | GFP_NOIO | __GFP_NOWARN);
 	if (!buffer) {
 		/* see kvfree for why size must be at least work_struct size
 		 * when allocated via vmalloc
 		 */
 		if (size < sizeof(struct work_struct))
 			size = sizeof(struct work_struct);
-		buffer = vmalloc(size);
+		if (flags & __GFP_ZERO)
+			buffer = vzalloc(size);
+		else
+			buffer = vmalloc(size);
 	}
 	return buffer;
 }

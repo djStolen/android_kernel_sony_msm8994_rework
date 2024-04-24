@@ -142,8 +142,8 @@ static void timerfd_setup_cancel(struct timerfd_ctx *ctx, int flags)
 {
 	spin_lock(&ctx->cancel_lock);
 	if ((ctx->clockid == CLOCK_REALTIME ||
-	     ctx->clockid == CLOCK_REALTIME_ALARM ||
-	     ctx->clockid == CLOCK_POWEROFF_ALARM) &&
+	     ctx->clockid == CLOCK_REALTIME_ALARM /*||		//TODO: djStolen; probably cherrypick from upstream Linux Kernel Version of 3.11 
+	     ctx->clockid == CLOCK_POWEROFF_ALARM*/) &&
 	    (flags & TFD_TIMER_ABSTIME) && (flags & TFD_TIMER_CANCEL_ON_SET)) {
 		if (!ctx->might_cancel) {
 			ctx->might_cancel = true;
@@ -151,10 +151,10 @@ static void timerfd_setup_cancel(struct timerfd_ctx *ctx, int flags)
 			list_add_rcu(&ctx->clist, &cancel_list);
 			spin_unlock(&cancel_lock);
 		}
-		} else {
-				__timerfd_remove_cancel(ctx);
-		}
-		spin_unlock(&ctx->cancel_lock);
+	} else {
+		__timerfd_remove_cancel(ctx);
+	}
+	spin_unlock(&ctx->cancel_lock);
 }
 
 static ktime_t timerfd_get_remaining(struct timerfd_ctx *ctx)
@@ -186,8 +186,10 @@ static int timerfd_setup(struct timerfd_ctx *ctx, int flags,
 	ctx->tintv = timespec_to_ktime(ktmr->it_interval);
 
 	if (isalarm(ctx)) {
-		type = clock2alarm(ctx->clockid);
-		alarm_init(&ctx->t.alarm, type, timerfd_alarmproc);
+		alarm_init(&ctx->t.alarm,
+			   ctx->clockid == CLOCK_REALTIME_ALARM ?
+			   ALARM_REALTIME : ALARM_BOOTTIME,
+			   timerfd_alarmproc);
 	} else {
 		hrtimer_init(&ctx->t.tmr, clockid, htmode);
 		hrtimer_set_expires(&ctx->t.tmr, texp);
@@ -329,9 +331,9 @@ SYSCALL_DEFINE2(timerfd_create, int, clockid, int, flags)
 	    (clockid != CLOCK_MONOTONIC &&
 	     clockid != CLOCK_REALTIME &&
 	     clockid != CLOCK_REALTIME_ALARM &&
-	     clockid != CLOCK_BOOTTIME &&
+/*	     clockid != CLOCK_BOOTTIME &&			//TODO: djStolen; probably cherrypick from upstream Linux Kernel Version of 3.11
 	     clockid != CLOCK_BOOTTIME_ALARM &&
-	     clockid != CLOCK_POWEROFF_ALARM))
+	     clockid != CLOCK_POWEROFF_ALARM*/))
 		return -EINVAL;
 
 	if (!capable(CAP_WAKE_ALARM) &&
@@ -347,12 +349,13 @@ SYSCALL_DEFINE2(timerfd_create, int, clockid, int, flags)
 	spin_lock_init(&ctx->cancel_lock);
 	ctx->clockid = clockid;
 
-	if (isalarm(ctx)) {
-		type = clock2alarm(ctx->clockid);
-		alarm_init(&ctx->t.alarm, type, timerfd_alarmproc);
-	} else {
+	if (isalarm(ctx))
+		alarm_init(&ctx->t.alarm,
+			   ctx->clockid == CLOCK_REALTIME_ALARM ?
+			   ALARM_REALTIME : ALARM_BOOTTIME,
+			   timerfd_alarmproc);
+	else
 		hrtimer_init(&ctx->t.tmr, clockid, HRTIMER_MODE_ABS);
-	}
 
 	ctx->moffs = ktime_get_monotonic_offset();
 

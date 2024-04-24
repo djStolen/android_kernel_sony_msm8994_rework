@@ -67,8 +67,6 @@ struct cfg80211_registered_device {
 	struct work_struct scan_done_wk;
 	struct work_struct sched_scan_results_wk;
 
-	struct mutex sched_scan_mtx;
-
 	struct genl_info *cur_cmd_info;
 
 	struct work_struct conn_work;

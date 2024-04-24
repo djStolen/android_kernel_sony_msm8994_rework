@@ -16,6 +16,7 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/smp.h>
+#include <linux/device.h>
 
 #include "tick-internal.h"
 
@@ -24,6 +25,13 @@ static LIST_HEAD(clockevent_devices);
 static LIST_HEAD(clockevents_released);
 /* Protection for the above */
 static DEFINE_RAW_SPINLOCK(clockevents_lock);
+/* Protection for unbind operations */
+static DEFINE_MUTEX(clockevents_mutex);
+
+struct ce_unbind {
+	struct clock_event_device *ce;
+	int res;
+};
 
 /**
  * clockevents_delta2ns - Convert a latch value (device ticks) to nanoseconds
@@ -228,21 +236,88 @@ int clockevents_program_event(struct clock_event_device *dev, ktime_t expires,
 }
 
 /*
- * Called after a notify add to make devices available which were
- * released from the notifier call.
+ * SMP function call to unbind a device
  */
-static void clockevents_notify_released(void)
+static void __clockevents_unbind(void *arg)
 {
-	struct clock_event_device *dev;
+	struct ce_unbind *cu = arg;
+	int res;
 
-	while (!list_empty(&clockevents_released)) {
-		dev = list_entry(clockevents_released.next,
-				 struct clock_event_device, list);
-		list_del(&dev->list);
-		list_add(&dev->list, &clockevent_devices);
-		tick_check_new_device(dev);
-	}
+	raw_spin_lock(&clockevents_lock);
+	res = __clockevents_try_unbind(cu->ce, smp_processor_id());
+	if (res == -EAGAIN)
+		res = clockevents_replace(cu->ce);
+	cu->res = res;
+	raw_spin_unlock(&clockevents_lock);
 }
+
+/*
+ * Try to install a replacement clock event device
+ */
+static int clockevents_replace(struct clock_event_device *ced)
+{
+	struct clock_event_device *dev, *newdev = NULL;
+
+	list_for_each_entry(dev, &clockevent_devices, list) {
+		if (dev == ced || dev->mode != CLOCK_EVT_MODE_UNUSED)
+			continue;
+
+		if (!tick_check_replacement(newdev, dev))
+			continue;
+
+		if (!try_module_get(dev->owner))
+			continue;
+
+		if (newdev)
+			module_put(newdev->owner);
+		newdev = dev;
+	}
+	if (newdev) {
+		tick_install_replacement(newdev);
+		list_del_init(&ced->list);
+	}
+	return newdev ? 0 : -EBUSY;
+}
+
+/*
+ * Called with clockevents_mutex and clockevents_lock held
+ */
+static int __clockevents_try_unbind(struct clock_event_device *ced, int cpu)
+{
+	/* Fast track. Device is unused */
+	if (ced->mode == CLOCK_EVT_MODE_UNUSED) {
+		list_del_init(&ced->list);
+		return 0;
+	}
+
+	return ced == per_cpu(tick_cpu_device, cpu).evtdev ? -EAGAIN : -EBUSY;
+}
+
+/*
+ * Issues smp function call to unbind a per cpu device. Called with
+ * clockevents_mutex held.
+ */
+static int clockevents_unbind(struct clock_event_device *ced, int cpu)
+{
+	struct ce_unbind cu = { .ce = ced, .res = -ENODEV };
+
+	smp_call_function_single(cpu, __clockevents_unbind, &cu, 1);
+	return cu.res;
+}
+ 
+/*
+ * Unbind a clockevents device.
+ */
+int clockevents_unbind_device(struct clock_event_device *ced, int cpu)
+{
+	int ret;
+
+	mutex_lock(&clockevents_mutex);
+	ret = clockevents_unbind(ced, cpu);
+	mutex_unlock(&clockevents_mutex);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(clockevents_unbind);
 
 /**
  * clockevents_register_device - register a clock event device

@@ -178,16 +178,55 @@ int tick_device_uses_broadcast(struct clock_event_device *dev, int cpu)
 		ret = 1;
 	} else {
 		/*
-		 * When the new device is not affected by the stop
-		 * feature and the cpu is marked in the broadcast mask
-		 * then clear the broadcast bit.
+		 * Clear the broadcast bit for this cpu if the
+		 * device is not power state affected.
 		 */
-		if (!(dev->features & CLOCK_EVT_FEAT_C3STOP)) {
-			int cpu = smp_processor_id();
+		if (!(dev->features & CLOCK_EVT_FEAT_C3STOP)) 
 			cpumask_clear_cpu(cpu, tick_broadcast_mask);
-			tick_broadcast_clear_oneshot(cpu);
-		} else {
+		else
 			tick_device_setup_broadcast_func(dev);
+
+		/*
+		 * Clear the broadcast bit if the CPU is not in
+		 * periodic broadcast on state.
+		 */
+		if (!cpumask_test_cpu(cpu, tick_broadcast_on))
+			cpumask_clear_cpu(cpu, tick_broadcast_mask);
+
+		switch (tick_broadcast_device.mode) {
+		case TICKDEV_MODE_ONESHOT:
+			/*
+			 * If the system is in oneshot mode we can
+			 * unconditionally clear the oneshot mask bit,
+			 * because the CPU is running and therefore
+			 * not in an idle state which causes the power
+			 * state affected device to stop. Let the
+			 * caller initialize the device.
+			 */
+			tick_broadcast_clear_oneshot(cpu);
+			ret = 0;
+			break;
+
+		case TICKDEV_MODE_PERIODIC:
+			/*
+			 * If the system is in periodic mode, check
+			 * whether the broadcast device can be
+			 * switched off now.
+			 */
+			if (cpumask_empty(tick_broadcast_mask) && bc)
+				clockevents_shutdown(bc);
+			/*
+			 * If we kept the cpu in the broadcast mask,
+			 * tell the caller to leave the per cpu device
+			 * in shutdown state. The periodic interrupt
+			 * is delivered by the broadcast device.
+			 */
+			ret = cpumask_test_cpu(cpu, tick_broadcast_mask);
+			break;
+		default:
+			/* Nothing to do */
+			ret = 0;
+			break;
 		}
 	}
 	raw_spin_unlock_irqrestore(&tick_broadcast_lock, flags);

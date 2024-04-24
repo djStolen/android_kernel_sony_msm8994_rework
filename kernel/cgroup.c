@@ -1361,8 +1361,11 @@ static int cgroup_remount(struct super_block *sb, int *flags, char *data)
 	removed_mask = root->subsys_mask & ~opts.subsys_mask;
 
 	/* Don't allow flags or name to change at remount */
-	if (opts.flags != root->flags ||
+	if (((opts.flags ^ root->flags) & CGRP_ROOT_OPTION_MASK) ||
 	    (opts.name && strcmp(opts.name, root->name))) {
+		pr_err("cgroup: option or name mismatch, new: 0x%lx \"%s\", old: 0x%lx \"%s\"\n",
+		       opts.flags & CGRP_ROOT_OPTION_MASK, opts.name ?: "",
+		       root->flags & CGRP_ROOT_OPTION_MASK, root->name);
 		ret = -EINVAL;
 		goto out_unlock;
 	}
@@ -1374,7 +1377,7 @@ static int cgroup_remount(struct super_block *sb, int *flags, char *data)
 	 */
 	cgroup_clear_directory(cgrp->dentry, false, removed_mask);
 
-	ret = rebind_subsystems(root, opts.subsys_mask);
+	ret = rebind_subsystems(root, added_mask, removed_mask);
 	if (ret) {
 		/* rebind_subsystems failed, re-populate the removed files */
 		cgroup_populate_dir(cgrp, false, removed_mask);
@@ -4164,7 +4167,7 @@ static int cgroup_populate_dir(struct cgroup *cgrp, bool base_files,
 	}
 
 	/* process cftsets of each subsystem */
-	for_each_subsys(cgrp->root, ss) {
+	for_each_root_subsys(cgrp->root, ss) {
 		struct cftype_set *set;
 		if (!test_bit(ss->subsys_id, &subsys_mask))
 			continue;
@@ -5595,19 +5598,19 @@ static int current_css_set_cg_links_read(struct cgroup *cgrp,
 }
 
 #define MAX_TASKS_SHOWN_PER_CSS 25
-static int cgroup_css_links_read(struct cgroup *cont,
+static int cgroup_css_links_read(struct cgroup *cgrp,
 				 struct cftype *cft,
 				 struct seq_file *seq)
 {
-	struct cg_cgroup_link *link;
+	struct cgrp_cset_link *link;
 
 	read_lock(&css_set_lock);
-	list_for_each_entry(link, &cont->css_sets, cgrp_link_list) {
-		struct css_set *cg = link->cg;
+	list_for_each_entry(link, &cgrp->cset_links, cset_link) {
+		struct css_set *cset = link->cset;
 		struct task_struct *task;
 		int count = 0;
-		seq_printf(seq, "css_set %pK\n", cg);
-		list_for_each_entry(task, &cg->tasks, cg_list) {
+		seq_printf(seq, "css_set %p\n", cset);
+		list_for_each_entry(task, &cset->tasks, cg_list) {
 			if (count++ > MAX_TASKS_SHOWN_PER_CSS) {
 				seq_puts(seq, "  ...\n");
 				break;

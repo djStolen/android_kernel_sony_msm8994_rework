@@ -1801,7 +1801,7 @@ int l2cap_chan_connect(struct l2cap_chan *chan, __le16 psm, u16 cid,
 
 	auth_type = l2cap_get_auth_type(chan);
 
-	if (chan->dcid == L2CAP_CID_LE_DATA)
+	if (bdaddr_type_is_le(dst_type))
 		hcon = hci_connect(hdev, LE_LINK, 0, dst, dst_type,
 				   chan->sec_level, auth_type);
 	else
@@ -6413,15 +6413,12 @@ static void l2cap_att_channel(struct l2cap_conn *conn,
 {
 	struct l2cap_chan *chan;
 
-	chan = l2cap_global_chan_by_scid(0, L2CAP_CID_LE_DATA,
+	chan = l2cap_global_chan_by_scid(BT_CONNECTED, L2CAP_CID_ATT,
 					 conn->src, conn->dst);
 	if (!chan)
 		goto drop;
 
 	BT_DBG("chan %pK, len %d", chan, skb->len);
-
-	if (chan->state != BT_BOUND && chan->state != BT_CONNECTED)
-		goto drop;
 
 	if (chan->imtu < skb->len)
 		goto drop;

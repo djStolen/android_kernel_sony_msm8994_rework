@@ -776,34 +776,18 @@ EXPORT_SYMBOL_GPL(restore_online_page_callback);
 
 void __online_page_set_limits(struct page *page)
 {
-	unsigned long pfn = page_to_pfn(page);
-
-	totalram_pages++;
-#ifdef CONFIG_FIX_MOVABLE_ZONE
-	if (zone_idx(page_zone(page)) != ZONE_MOVABLE)
-		total_unmovable_pages++;
-#endif
-	if (pfn >= num_physpages)
-		num_physpages = pfn + 1;
 }
 EXPORT_SYMBOL_GPL(__online_page_set_limits);
 
 void __online_page_increment_counters(struct page *page)
 {
-	totalram_pages++;
-
-#ifdef CONFIG_HIGHMEM
-	if (PageHighMem(page))
-		totalhigh_pages++;
-#endif
+	adjust_managed_page_count(page, 1);
 }
 EXPORT_SYMBOL_GPL(__online_page_increment_counters);
 
 void __online_page_free(struct page *page)
 {
-	ClearPageReserved(page);
-	init_page_count(page);
-	__free_page(page);
+	__free_reserved_page(page);
 }
 EXPORT_SYMBOL_GPL(__online_page_free);
 
@@ -1638,13 +1622,14 @@ repeat:
 	/* reset pagetype flags and makes migrate type to be MOVABLE */
 	undo_isolate_page_range(start_pfn, end_pfn, MIGRATE_MOVABLE);
 	/* removal success */
-	zone->managed_pages -= offlined_pages;
+	adjust_managed_page_count(pfn_to_page(start_pfn), -offlined_pages);
 	if (offlined_pages > zone->present_pages)
 		zone->present_pages = 0;
 	else
 		zone->present_pages -= offlined_pages;
+	pgdat_resize_lock(zone->zone_pgdat, &flags);
 	zone->zone_pgdat->node_present_pages -= offlined_pages;
-	totalram_pages -= offlined_pages;
+	pgdat_resize_unlock(zone->zone_pgdat, &flags);
 
 #ifdef CONFIG_FIX_MOVABLE_ZONE
 	if (zone_idx(zone) != ZONE_MOVABLE)
@@ -1891,18 +1876,6 @@ void __ref remove_memory(int nid, u64 start, u64 size)
 	try_offline_node(nid);
 
 	unlock_memory_hotplug();
-
-	return 0;
 }
-
-#else
-int offline_pages(unsigned long start_pfn, unsigned long nr_pages)
-{
-	return -EINVAL;
-}
-int remove_memory(int nid, u64 start, u64 size)
-{
-	return -EINVAL;
-}
-#endif /* CONFIG_MEMORY_HOTREMOVE */
 EXPORT_SYMBOL_GPL(remove_memory);
+#endif /* CONFIG_MEMORY_HOTREMOVE */

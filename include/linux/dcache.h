@@ -331,7 +331,7 @@ static inline int __d_rcu_to_refcount(struct dentry *dentry, unsigned seq)
 
 static inline unsigned d_count(struct dentry *dentry)
 {
-	return dentry->d_count;
+	return dentry->d_lockref.count;
 }
 
 /* validate "insecure" dentry pointer */

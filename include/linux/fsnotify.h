@@ -228,7 +228,7 @@ static inline void fsnotify_modify(struct file *file)
 static inline void fsnotify_open(struct file *file)
 {
 	struct path *path = &file->f_path;
-	struct inode *inode = path->dentry->d_inode;
+	struct inode *inode = file_inode(file);
 	struct path lower_path;
 
 	__u32 mask = FS_OPEN;

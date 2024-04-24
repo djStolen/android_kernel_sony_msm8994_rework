@@ -2271,24 +2271,18 @@ void wiphy_regulatory_register(struct wiphy *wiphy)
 {
 	struct regulatory_request *lr;
 
-	mutex_lock(&reg_mutex);
-
 	if (!reg_dev_ignore_cell_hint(wiphy))
 		reg_num_devs_support_basehint++;
 
 	lr = get_last_request();
 	wiphy_update_regulatory(wiphy, lr->initiator);
-
-	mutex_unlock(&reg_mutex);
 }
 
-/* Caller must hold cfg80211_mutex */
 void wiphy_regulatory_deregister(struct wiphy *wiphy)
 {
 	struct wiphy *request_wiphy = NULL;
 	struct regulatory_request *lr;
 
-	mutex_lock(&reg_mutex);
 	lr = get_last_request();
 
 	if (!reg_dev_ignore_cell_hint(wiphy))

@@ -806,9 +806,7 @@ static int cfg80211_netdev_notifier_call(struct notifier_block *nb,
 			break;
 		case NL80211_IFTYPE_P2P_CLIENT:
 		case NL80211_IFTYPE_STATION:
-			mutex_lock(&rdev->sched_scan_mtx);
 			__cfg80211_stop_sched_scan(rdev, false);
-			mutex_unlock(&rdev->sched_scan_mtx);
 
 			wdev_lock(wdev);
 #ifdef CONFIG_CFG80211_WEXT
@@ -818,15 +816,15 @@ static int cfg80211_netdev_notifier_call(struct notifier_block *nb,
 			wdev->wext.connect.auth_type =
 						NL80211_AUTHTYPE_AUTOMATIC;
 #endif
-			__cfg80211_disconnect(rdev, dev,
-					      WLAN_REASON_DEAUTH_LEAVING, true);
+			cfg80211_disconnect(rdev, dev,
+				    WLAN_REASON_DEAUTH_LEAVING, true);
 			cfg80211_mlme_down(rdev, dev);
 			wdev_unlock(wdev);
 			break;
 		case NL80211_IFTYPE_MESH_POINT:
 			cfg80211_leave_mesh(rdev, dev);
 			break;
-		case NL80211_IFTYPE_AP:
+		case NL80211_IFTYPE_P2P_GO:
 			cfg80211_stop_ap(rdev, dev);
 			break;
 		default:

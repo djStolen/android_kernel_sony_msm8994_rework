@@ -87,6 +87,7 @@ struct cpufreq_policy {
 	struct list_head        policy_list;
 	struct kobject		kobj;
 	struct completion	kobj_unregister;
+	int			transition_ongoing; /* Tracks transition status */
 
 	/*
 	 * The rules for this semaphore:
@@ -202,6 +203,7 @@ __ATTR(_name, 0644, show_##_name, store_##_name)
 
 
 struct cpufreq_driver {
+	struct module		*owner;
 	char			name[CPUFREQ_NAME_LEN];
 	u8			flags;
 

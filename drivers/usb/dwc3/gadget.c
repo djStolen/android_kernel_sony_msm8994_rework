@@ -3848,5 +3848,8 @@ err1:
 	__dwc3_gadget_ep_disable(dwc->eps[0]);
 
 err0:
+	dwc->gadget_driver = NULL;
+// 	spin_unlock_irqrestore(&dwc->lock, flags); // TODO:djStolen; spin_lock_irqsave(&dwc->lock, flags); is missing; possibly check in the complete code base of Linux Kernel 3.11
+ 	
 	return ret;
 }

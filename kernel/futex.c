@@ -61,6 +61,7 @@
 #include <linux/nsproxy.h>
 #include <linux/ptrace.h>
 #include <linux/sched/rt.h>
+#include <linux/hugetlb.h>
 #include <linux/freezer.h>
 #include <linux/bootmem.h>
 
@@ -453,7 +454,7 @@ again:
 
 		key->both.offset |= FUT_OFF_INODE; /* inode-based key */
 		key->shared.inode = inode;
-		key->shared.pgoff = page_head->index;
+		key->shared.pgoff = basepage_index(page);
 		rcu_read_unlock();
 	}
 

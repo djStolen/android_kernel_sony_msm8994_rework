@@ -319,13 +319,14 @@ struct mmc_host {
 #define MMC_CAP2_PACKED_CMD	(MMC_CAP2_PACKED_RD | \
 				 MMC_CAP2_PACKED_WR)
 #define MMC_CAP2_NO_PRESCAN_POWERUP (1 << 14)	/* Don't power up before scan */
+#define MMC_CAP2_SANITIZE	(1 << 15)		/* Support Sanitize */
 #define MMC_CAP2_INIT_BKOPS	    (1 << 15)	/* Need to set BKOPS_EN */
 #define MMC_CAP2_PACKED_WR_CONTROL (1 << 16) /* Allow write packing control */
 #define MMC_CAP2_CLK_SCALE	(1 << 17)	/* Allow dynamic clk scaling */
 #define MMC_CAP2_STOP_REQUEST	(1 << 18)	/* Allow stop ongoing request */
 /* Use runtime PM framework provided by MMC core */
 #define MMC_CAP2_CORE_RUNTIME_PM (1 << 19)
-#define MMC_CAP2_SANITIZE	(1 << 20)		/* Support Sanitize */
+//#define MMC_CAP2_SANITIZE	(1 << 20)		/* Support Sanitize */		// TODO: djStolen; possibly cherrypick from newer Linux Kernel than 3.10
 /* Allows Asynchronous SDIO irq while card is in 4-bit mode */
 #define MMC_CAP2_ASYNC_SDIO_IRQ_4BIT_MODE (1 << 21)
 

@@ -303,7 +303,7 @@ static void sg_complete(struct urb *urb)
 		 */
 		spin_unlock(&io->lock);
 		for (i = 0, found = 0; i < io->entries; i++) {
-			if (!io->urbs[i])
+			if (!io->urbs[i] || !io->urbs[i]->dev)
 				continue;
 			if (found) {
 				usb_block_urb(io->urbs[i]);
@@ -519,7 +519,7 @@ void usb_sg_wait(struct usb_sg_request *io)
 		io->urbs[i]->dev = io->dev;
 		spin_unlock_irq(&io->lock);
 
-		retval = usb_submit_urb(io->urbs[i], GFP_NOIO);
+		retval = usb_submit_urb(io->urbs[i], GFP_ATOMIC);
 
 		switch (retval) {
 			/* maybe we retrying will recover */

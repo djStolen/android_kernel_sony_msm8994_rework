@@ -196,9 +196,11 @@ struct inet6_dev {
 	struct in6_addr		token;
 
 	struct neigh_parms	*nd_parms;
-	struct inet6_dev	*next;
 	struct ipv6_devconf	cnf;
 	struct ipv6_devstat	stats;
+
+	struct timer_list	rs_timer;
+	__u8			rs_probes;
 
 	__s32			rs_interval;	/* in jiffies */
 
